@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /congregationData/{docId} {
+      // Access is limited to authenticated sessions. Role-level write protection
+      // should be enforced with Firebase custom claims in a subsequent step.
+      allow read, write: if request.auth != null;
+    }
+  }
+}

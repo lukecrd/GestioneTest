@@ -1,0 +1,163 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 360" width="500" height="360">
+  <!-- Subtle ground baseline -->
+  <line x1="30" y1="280" x2="470" y2="280" stroke="#8c8273" stroke-width="2" stroke-linecap="round" />
+
+  <!-- ==================== PERSON 1: Interested Man (Left) ==================== -->
+  <g id="man-left">
+    <!-- Shoes / Feet -->
+    <ellipse cx="85" cy="275" rx="11" ry="5" fill="#c49a6c" stroke="#333" stroke-width="1.2" />
+    <ellipse cx="108" cy="275" rx="11" ry="5" fill="#c49a6c" stroke="#333" stroke-width="1.2" />
+    <rect x="80" y="270" width="10" height="5" fill="#fbf5dd" />
+    <rect x="103" y="270" width="10" height="5" fill="#fbf5dd" />
+
+    <!-- Bare Legs -->
+    <rect x="81" y="222" width="10" height="50" fill="#f2c8a2" stroke="#333" stroke-width="1.2" />
+    <rect x="102" y="222" width="10" height="50" fill="#f2c8a2" stroke="#333" stroke-width="1.2" />
+
+    <!-- Green Shorts -->
+    <path d="M 74 175 L 118 175 L 115 224 L 97 224 L 96 185 L 94 185 L 93 224 L 76 224 Z" fill="#587c53" stroke="#333" stroke-width="1.5" stroke-linejoin="round" />
+
+    <!-- Shirt (Inner white t-shirt) -->
+    <rect x="78" y="120" width="34" height="58" fill="#f7f5ed" stroke="#333" stroke-width="1.2" />
+
+    <!-- Outer Green/Teal Jacket -->
+    <path d="M 68 120 L 80 120 L 76 182 L 64 180 Z" fill="#4a7375" stroke="#333" stroke-width="1.5" stroke-linejoin="round" />
+    <path d="M 112 120 L 124 120 L 128 180 L 116 182 Z" fill="#4a7375" stroke="#333" stroke-width="1.5" stroke-linejoin="round" />
+
+    <!-- Arms bent forward holding hands/looking down -->
+    <path d="M 70 122 C 60 145, 95 160, 110 152" fill="none" stroke="#4a7375" stroke-width="12" stroke-linecap="round" />
+    <path d="M 70 122 C 60 145, 95 160, 110 152" fill="none" stroke="#333" stroke-width="1.5" stroke-linecap="round" />
+
+    <!-- Head & Neck -->
+    <rect x="91" y="105" width="10" height="18" fill="#f2c8a2" stroke="#333" stroke-width="1.2" />
+    <ellipse cx="96" cy="92" rx="15" ry="18" fill="#f2c8a2" stroke="#333" stroke-width="1.5" />
+
+    <!-- Hair (Ginger/Light Brown) -->
+    <path d="M 81 90 C 80 72, 112 70, 112 88 C 108 78, 88 78, 81 90 Z" fill="#d08044" stroke="#333" stroke-width="1.5" />
+
+    <!-- Glasses & Nose -->
+    <circle cx="92" cy="92" r="5" fill="none" stroke="#333" stroke-width="1.5" />
+    <circle cx="104" cy="92" r="5" fill="none" stroke="#333" stroke-width="1.5" />
+    <line x1="97" y1="92" x2="99" y2="92" stroke="#333" stroke-width="1.5" />
+    <path d="M 100 95 Q 104 98 100 102" fill="none" stroke="#333" stroke-width="1.2" />
+  </g>
+
+  <!-- ==================== PERSON 2: Publisher Man with Suit & Bible (Center) ==================== -->
+  <g id="man-center">
+    <!-- Shoes -->
+    <ellipse cx="168" cy="276" rx="13" ry="5" fill="#4a2e1b" stroke="#333" stroke-width="1.2" />
+    <ellipse cx="202" cy="276" rx="13" ry="5" fill="#4a2e1b" stroke="#333" stroke-width="1.2" />
+
+    <!-- Dark Suit Trousers -->
+    <rect x="160" y="180" width="15" height="95" fill="#3a3e3b" stroke="#333" stroke-width="1.5" />
+    <rect x="190" y="180" width="15" height="95" fill="#3a3e3b" stroke="#333" stroke-width="1.5" />
+
+    <!-- Suit Jacket -->
+    <rect x="152" y="112" width="62" height="74" fill="#3a3e3b" stroke="#333" stroke-width="1.5" rx="3" />
+
+    <!-- White Shirt & Red Tie -->
+    <polygon points="175,112 191,112 183,142" fill="#ffffff" stroke="#333" stroke-width="1" />
+    <polygon points="181,118 185,118 187,155 183,160 179,155" fill="#d9381e" stroke="#333" stroke-width="1" />
+
+    <!-- Arms Holding Open Book -->
+    <path d="M 155 125 L 138 150 L 160 156" fill="none" stroke="#3a3e3b" stroke-width="12" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M 155 125 L 138 150 L 160 156" fill="none" stroke="#333" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+
+    <!-- Open Book / Bible -->
+    <path d="M 125 140 L 148 148 L 148 165 L 125 156 Z" fill="#ffffff" stroke="#333" stroke-width="1.2" />
+    <path d="M 148 148 L 172 140 L 172 156 L 148 165 Z" fill="#ffffff" stroke="#333" stroke-width="1.2" />
+    <path d="M 122 154 L 148 166 L 174 154" fill="none" stroke="#7a4b2a" stroke-width="3" stroke-linejoin="round" />
+    <!-- Book pages lines -->
+    <line x1="130" y1="147" x2="144" y2="152" stroke="#aaa" stroke-width="1" />
+    <line x1="130" y1="151" x2="144" y2="156" stroke="#aaa" stroke-width="1" />
+    <line x1="152" y1="152" x2="166" y2="147" stroke="#aaa" stroke-width="1" />
+    <line x1="152" y1="156" x2="166" y2="151" stroke="#aaa" stroke-width="1" />
+
+    <!-- Head & Neck -->
+    <rect x="178" y="98" width="10" height="16" fill="#e2b082" stroke="#333" stroke-width="1.2" />
+    <ellipse cx="183" cy="86" rx="14" ry="17" fill="#e2b082" stroke="#333" stroke-width="1.5" />
+
+    <!-- Hair (Dark Brown) -->
+    <path d="M 169 82 C 169 66, 197 66, 197 82 C 193 72, 173 72, 169 82 Z" fill="#4d3319" stroke="#333" stroke-width="1.5" />
+
+    <!-- Glasses & Face Details -->
+    <circle cx="177" cy="86" r="4.5" fill="none" stroke="#333" stroke-width="1.5" />
+    <circle cx="189" cy="86" r="4.5" fill="none" stroke="#333" stroke-width="1.5" />
+    <line x1="181.5" y1="86" x2="184.5" y2="86" stroke="#333" stroke-width="1.5" />
+  </g>
+
+  <!-- ==================== PERSON 3: Publisher Woman (Right Center) ==================== -->
+  <g id="woman-right">
+    <!-- Shoes -->
+    <ellipse cx="252" cy="276" rx="10" ry="4" fill="#222" stroke="#333" stroke-width="1.2" />
+    <ellipse cx="272" cy="276" rx="10" ry="4" fill="#222" stroke="#333" stroke-width="1.2" />
+
+    <!-- Legs -->
+    <rect x="248" y="235" width="8" height="40" fill="#e2b082" stroke="#333" stroke-width="1.2" />
+    <rect x="268" y="235" width="8" height="40" fill="#e2b082" stroke="#333" stroke-width="1.2" />
+
+    <!-- Dark Suit Skirt -->
+    <path d="M 240 180 L 282 180 L 288 236 L 234 236 Z" fill="#3a3e3b" stroke="#333" stroke-width="1.5" stroke-linejoin="round" />
+
+    <!-- Dark Suit Jacket -->
+    <rect x="240" y="118" width="42" height="64" fill="#3a3e3b" stroke="#333" stroke-width="1.5" rx="3" />
+    <!-- White Blouse Inner -->
+    <polygon points="256,118 266,118 261,142" fill="#ffffff" stroke="#333" stroke-width="1" />
+
+    <!-- Arms -->
+    <path d="M 242 124 L 235 160 L 248 165" fill="none" stroke="#3a3e3b" stroke-width="10" stroke-linecap="round" stroke-linejoin="round" />
+    <path d="M 242 124 L 235 160 L 248 165" fill="none" stroke="#333" stroke-width="1.5" stroke-linecap="round" />
+
+    <!-- Head & Neck -->
+    <rect x="256" y="104" width="9" height="16" fill="#e2b082" stroke="#333" stroke-width="1.2" />
+    <ellipse cx="260" cy="92" rx="13" ry="15" fill="#e2b082" stroke="#333" stroke-width="1.5" />
+
+    <!-- Hair (Blonde, Shoulders length) -->
+    <path d="M 245 92 C 245 70, 275 70, 275 92 C 282 108, 276 122, 270 122 C 265 106, 255 106, 245 92 Z" fill="#e8c065" stroke="#333" stroke-width="1.5" stroke-linejoin="round" />
+  </g>
+
+  <!-- ==================== LITERATURE DISPLAY CART (Far Right) ==================== -->
+  <g id="display-cart">
+    <!-- Rear Legs / Frame Structure -->
+    <line x1="335" y1="280" x2="385" y2="100" stroke="#4a3e38" stroke-width="6" stroke-linecap="round" />
+    <line x1="335" y1="280" x2="385" y2="100" stroke="#333" stroke-width="1.5" stroke-linecap="round" />
+
+    <line x1="420" y1="280" x2="395" y2="100" stroke="#362d28" stroke-width="6" stroke-linecap="round" />
+    <line x1="420" y1="280" x2="395" y2="100" stroke="#333" stroke-width="1.5" stroke-linecap="round" />
+
+    <!-- Main Display Frame Board (Top Display Poster) -->
+    <rect x="340" y="100" width="85" height="55" fill="#ffffff" stroke="#4a3e38" stroke-width="4" rx="2" />
+    <rect x="340" y="100" width="85" height="55" fill="none" stroke="#333" stroke-width="1.5" rx="2" />
+
+    <!-- Poster Content (Landscape Illustration on Display) -->
+    <rect x="344" y="104" width="77" height="47" fill="#cde5d4" />
+    <path d="M 344 135 Q 365 120 380 130 T 421 125 L 421 151 L 344 151 Z" fill="#69a37e" />
+    <circle cx="400" cy="116" r="6" fill="#f4d160" />
+
+    <!-- Shelf 1 (Middle) -->
+    <polygon points="330,165 425,165 423,172 332,172" fill="#5c4d44" stroke="#333" stroke-width="1.2" />
+    <!-- Magazines on Shelf 1 -->
+    <rect x="338" y="152" width="22" height="14" fill="#6ba2b9" stroke="#333" stroke-width="1" rx="1" />
+    <rect x="365" y="150" width="22" height="16" fill="#e07a5f" stroke="#333" stroke-width="1" rx="1" />
+    <rect x="392" y="153" width="22" height="13" fill="#81b29a" stroke="#333" stroke-width="1" rx="1" />
+
+    <!-- Shelf 2 (Lower) -->
+    <polygon points="325,200 430,200 428,208 327,208" fill="#5c4d44" stroke="#333" stroke-width="1.2" />
+    <!-- Books on Shelf 2 -->
+    <rect x="332" y="186" width="26" height="15" fill="#f4f1de" stroke="#333" stroke-width="1" rx="1" />
+    <rect x="364" y="184" width="26" height="17" fill="#3d5a80" stroke="#333" stroke-width="1" rx="1" />
+    <rect x="396" y="187" width="24" height="14" fill="#e07a5f" stroke="#333" stroke-width="1" rx="1" />
+
+    <!-- Base Box with "GRATIS" banner -->
+    <rect x="320" y="228" width="115" height="32" fill="#ffffff" stroke="#4a3e38" stroke-width="4" rx="2" />
+    <rect x="320" y="228" width="115" height="32" fill="none" stroke="#333" stroke-width="1.5" rx="2" />
+    <text x="377" y="250" font-family="'Arial Black', sans-serif" font-weight="900" font-size="16" fill="#2b2b2b" text-anchor="middle" letter-spacing="3">GRATIS</text>
+
+    <!-- Cart Wheels -->
+    <circle cx="330" cy="280" r="10" fill="#2b2b2b" stroke="#000" stroke-width="1.5" />
+    <circle cx="330" cy="280" r="4" fill="#fbf5dd" />
+
+    <circle cx="425" cy="280" r="10" fill="#2b2b2b" stroke="#000" stroke-width="1.5" />
+    <circle cx="425" cy="280" r="4" fill="#fbf5dd" />
+  </g>
+</svg>

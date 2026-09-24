@@ -1,0 +1,22 @@
+{
+  "entities": {
+    "congregationData": {
+      "title": "Congregation Data",
+      "description": "Shared congregation data including members, availability, archives, public witnessing and field service meetings",
+      "type": "object",
+      "properties": {
+        "people": { "type": "array" },
+        "unavail": { "type": "object" },
+        "special": { "type": "object" },
+        "groups": { "type": "object" },
+        "mensileArchives": { "type": "array" },
+        "operaPubblica": { "type": "object" },
+        "servizioCampo": { "type": "object" },
+        "vitaEMinistero": { "type": "object" },
+        "activePrograms": { "type": "object" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["updatedAt"]
+    }
+  }
+}

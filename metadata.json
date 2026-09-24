@@ -1,0 +1,6 @@
+{
+  "name": "Dashboard Congregazione",
+  "description": "Gestione turni, programma Vita e ministero, adunanze per il servizio di campo, opera pubblica, riassetto, pulizie e programma mensile",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
