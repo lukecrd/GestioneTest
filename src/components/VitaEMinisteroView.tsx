@@ -1217,7 +1217,134 @@ export function VitaEMinisteroView({
                                   value={part.studentId || ''}
                                   onChange={e => {
                                     const updatedParts = [...meeting.ministeroParts];
-               …2145 tokens truncated…lassName={`px-2.5 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1 border transition-all cursor-pointer select-none active:scale-95 ${
+                                    updatedParts[pIdx].studentId = e.target.value;
+                                    handleUpdateSingleMeeting(meeting.id, { ministeroParts: updatedParts });
+                                  }}
+                                  className="inp text-xs py-1"
+                                >
+                                  {renderParticipantOptions('ministeroStudente', part.studentId, undefined, part.partTypeIds)}
+                                </select>
+                              </div>
+
+                              {/* Assistant Checkbox & Selector */}
+                              <div className="sm:col-span-4">
+                                <div className="flex items-center justify-between mb-0.5">
+                                  <label className="chk text-[10px]">
+                                    <input
+                                      type="checkbox"
+                                      disabled={!isAdmin}
+                                      checked={part.hasAssistant}
+                                      onChange={e => {
+                                        const updatedParts = [...meeting.ministeroParts];
+                                        updatedParts[pIdx].hasAssistant = e.target.checked;
+                                        if (!e.target.checked) updatedParts[pIdx].assistantId = '';
+                                        handleUpdateSingleMeeting(meeting.id, { ministeroParts: updatedParts });
+                                      }}
+                                    />
+                                    <span>Con Assistente</span>
+                                  </label>
+                                </div>
+
+                                {part.hasAssistant ? (
+                                  <select
+                                    disabled={!isAdmin}
+                                    value={part.assistantId || ''}
+                                    onChange={e => {
+                                      const updatedParts = [...meeting.ministeroParts];
+                                      updatedParts[pIdx].assistantId = e.target.value;
+                                      handleUpdateSingleMeeting(meeting.id, { ministeroParts: updatedParts });
+                                    }}
+                                    className="inp text-xs py-1"
+                                  >
+                                    {renderParticipantOptions('ministeroAssistente', part.assistantId)}
+                                  </select>
+                                ) : (
+                                  <div className="text-[11px] text-slate-400 italic py-1">
+                                    Discorso singolo (nessun assistente)
+                                  </div>
+                                )}
+                              </div>
+
+                              {/* Delete Part Button */}
+                              {isAdmin && (
+                                <div className="sm:col-span-1 text-right">
+                                  <button
+                                    onClick={() => {
+                                      const updatedParts = meeting.ministeroParts.filter((_, idx) => idx !== pIdx);
+                                      handleUpdateSingleMeeting(meeting.id, { ministeroParts: updatedParts });
+                                    }}
+                                    className="p-1 text-slate-400 hover:text-rose-600 rounded"
+                                    title="Rimuovi parte"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Row 1.5: Tipo di parte (criteri per filtrare i proclamatori idonei) */}
+                            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                              <span className="text-[10px] text-slate-500 font-semibold shrink-0">
+                                Tipo di parte:
+                              </span>
+                              {ministeroPartTypes.map(pt => {
+                                const active = !!part.partTypeIds?.includes(pt.id);
+                                return (
+                                  <button
+                                    key={pt.id}
+                                    type="button"
+                                    disabled={!isAdmin}
+                                    onClick={() => {
+                                      const updatedParts = [...meeting.ministeroParts];
+                                      const current = updatedParts[pIdx].partTypeIds || [];
+                                      updatedParts[pIdx].partTypeIds = active
+                                        ? current.filter(id => id !== pt.id)
+                                        : [...current, pt.id];
+                                      handleUpdateSingleMeeting(meeting.id, { ministeroParts: updatedParts });
+                                    }}
+                                    title={pt.label}
+                                    className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border transition-colors ${
+                                      active
+                                        ? 'bg-violet-100 border-violet-300 text-violet-800 dark:bg-violet-950/70 dark:border-violet-700 dark:text-violet-300'
+                                        : 'bg-white border-slate-200 text-slate-500 dark:bg-slate-900 dark:border-slate-700 dark:text-slate-400'
+                                    } ${!isAdmin ? 'opacity-70' : 'hover:border-violet-300'}`}
+                                  >
+                                    {pt.label}
+                                  </button>
+                                );
+                              })}
+                              {isAdmin && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const updatedParts = [...meeting.ministeroParts];
+                                    updatedParts[pIdx].partTypeIds = inferPartTypeIds(part.minutes, part.hasAssistant);
+                                    handleUpdateSingleMeeting(meeting.id, { ministeroParts: updatedParts });
+                                  }}
+                                  title="Reimposta i tipi in base a durata e formato della parte"
+                                  className="px-2 py-0.5 rounded-full text-[10px] font-semibold border border-dashed border-slate-300 text-slate-500 hover:border-slate-400 dark:border-slate-600 dark:text-slate-400"
+                                >
+                                  Auto
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Row 2: S-89 Assignment Slip Details */}
+                            {part.studentId && (
+                              <div className="pt-2 border-t border-slate-100 dark:border-slate-700/80 flex flex-wrap items-center justify-between gap-2 text-xs">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="text-[11px] font-bold text-slate-600 dark:text-slate-400 flex items-center gap-1">
+                                    <FileText className="w-3.5 h-3.5 text-amber-500" />
+                                    Foglietto S-89:
+                                  </span>
+
+                                  {/* Flag Inviato / Non Inviato */}
+                                  <button
+                                    type="button"
+                                    disabled={!isAdmin}
+                                    onClick={() => handleTogglePartSent(meeting, pIdx)}
+                                    title="Clicca per invertire lo stato Inviato / Non inviato"
+                                    className={`px-2.5 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1 border transition-all cursor-pointer select-none active:scale-95 ${
                                       part.isSent
                                         ? 'bg-emerald-500 text-white border-emerald-600 shadow-2xs hover:bg-emerald-600'
                                         : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-300 dark:border-amber-700 hover:bg-amber-100'
