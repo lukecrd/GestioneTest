@@ -327,6 +327,8 @@ export interface MensileRow {
 export interface DomenicaRow {
   date: Date;
   special?: string;
+  oratore?: string;
+  titoloDiscorso?: string;
   presidente?: string;
   preghiera?: string;
   lettore?: string;

@@ -52,6 +52,7 @@ import { ModernSectionHub, SectionKey } from './components/ModernSectionHub';
 import { ModernSquareNavbar } from './components/ModernSquareNavbar';
 import { ExcelImportModal } from './components/ExcelImportModal';
 import { DEFAULT_VITA_MINISTERO_DATA } from './data/defaultVitaEMinistero';
+import { TITOLI_DISCORSI_PUBBLICI } from './data/titoliDiscorsiPubblici';
 import { auth } from './firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import {
@@ -938,18 +939,20 @@ export default function App() {
   const exportDomenicaToExcel = () => {
     if (!domRows) return;
     const rows: (string | number)[][] = [
-      ['Programma Adunanza del Fine Settimana', '', '', ''],
-      [`${domTitle}`, '', '', ''],
-      ['', '', '', ''],
-      ['Data', 'Presidente', 'Preghiera Finale', 'Lettore Torre di Guardia'],
+      ['Programma Adunanza del Fine Settimana', '', '', '', '', ''],
+      [`${domTitle}`, '', '', '', '', ''],
+      ['', '', '', '', '', ''],
+      ['Data', 'Oratore', 'Titolo discorso pubblico', 'Presidente', 'Preghiera finale', 'Lettore Torre di Guardia'],
     ];
 
     domRows.forEach(r => {
       if (r.special) {
-        rows.push([`${GIORNI[r.date.getDay()]} ${fmtDate(r.date)}`, r.special, '', '']);
+        rows.push([`${GIORNI[r.date.getDay()]} ${fmtDate(r.date)}`, r.special, '', '', '', '']);
       } else {
         rows.push([
           `${GIORNI[r.date.getDay()]} ${fmtDate(r.date)}`,
+          r.oratore || '---',
+          r.titoloDiscorso || '---',
           r.presidente || '---',
           r.preghiera || '---',
           r.lettore || '---',
@@ -959,11 +962,13 @@ export default function App() {
 
     const worksheet = XLSX.utils.aoa_to_sheet(rows);
     worksheet['!merges'] = [
-      { s: { r: 0, c: 0 }, e: { r: 0, c: 3 } },
-      { s: { r: 1, c: 0 }, e: { r: 1, c: 3 } },
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 5 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: 5 } },
     ];
     worksheet['!cols'] = [
       { wch: 25 },
+      { wch: 24 },
+      { wch: 55 },
       { wch: 25 },
       { wch: 25 },
       { wch: 28 },
@@ -1171,6 +1176,8 @@ export default function App() {
 
       const row: DomenicaRow = {
         date: sun,
+        oratore: '',
+        titoloDiscorso: '',
         presidente: pres?.name || '—',
         preghiera: preg?.name || '—',
         lettore: lett?.name || '—',
@@ -1218,6 +1225,13 @@ export default function App() {
       domMonth: m,
       domYear: y,
     });
+  };
+
+  const updateDomenicaField = (rowIndex: number, field: 'oratore' | 'titoloDiscorso' | 'presidente' | 'preghiera', value: string) => {
+    if (!checkAdminPermission() || !domRows) return;
+    const updatedRows = domRows.map((row, index) => index === rowIndex ? { ...row, [field]: value } : row);
+    setDomRows(updatedRows);
+    syncActivePrograms({ domRows: updatedRows });
   };
 
   // --- INDISPONIBILITÀ & DATE SPECIALI ---
@@ -2229,7 +2243,7 @@ export default function App() {
             <div>
               <p className="page-eyebrow">Programmi</p>
               <h1 className="page-title">Adunanza domenica</h1>
-              <p className="page-description">Pianifica presidente, preghiera finale e lettore per le domeniche del mese.</p>
+              <p className="page-description">Pianifica oratore, titolo del discorso pubblico, presidente, preghiera finale e lettore per le domeniche del mese.</p>
             </div>
           </div>
           <div className="card no-print">
@@ -2238,7 +2252,7 @@ export default function App() {
               <h2 className="card-title">Genera programma Adunanza Domenica</h2>
             </div>
             <p className="text-slate-500 dark:text-slate-400 text-xs mt-1">
-              Per ogni domenica: Presidente, Preghiera finale e Lettore Torre di Guardia. Rotazione equa; una persona non ricopre due ruoli nella stessa adunanza. Rispetta indisponibilità e date speciali.
+              Per ogni domenica: oratore e discorso pubblico, Presidente, Preghiera finale e Lettore Torre di Guardia. Rotazione equa; una persona non ricopre due ruoli nella stessa adunanza. Rispetta indisponibilità e date speciali.
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 mt-4">
               <div className="flex flex-col gap-1">
@@ -2297,10 +2311,10 @@ export default function App() {
                   <button
                     onClick={() => {
                       if (!domRows) return;
-                      const header = ['Data', 'Giorno', 'Presidente', 'Preghiera finale', 'Lettore Torre di Guardia'];
+                      const header = ['Data', 'Giorno', 'Oratore', 'Titolo discorso pubblico', 'Presidente', 'Preghiera finale', 'Lettore Torre di Guardia'];
                       const data = domRows.map(r => r.special
-                        ? [fmtDate(r.date), GIORNI[r.date.getDay()], r.special, '', '']
-                        : [fmtDate(r.date), GIORNI[r.date.getDay()], r.presidente, r.preghiera, r.lettore]);
+                        ? [fmtDate(r.date), GIORNI[r.date.getDay()], r.special, '', '', '', '']
+                        : [fmtDate(r.date), GIORNI[r.date.getDay()], r.oratore || '', r.titoloDiscorso || '', r.presidente, r.preghiera, r.lettore]);
                       downloadCsv('adunanza_domenica_' + domTitle.replace(/\s+/g, '_') + '.csv', header, data);
                     }}
                     className="btn-ghost text-slate-500 text-xs"
@@ -2325,6 +2339,8 @@ export default function App() {
                     <tr>
                       <th>Data</th>
                       <th>Giorno</th>
+                      <th>Oratore</th>
+                      <th>Discorso pubblico</th>
                       <th>Presidente</th>
                       <th>Preghiera finale</th>
                       <th>Lettore Torre di Guardia</th>
@@ -2345,11 +2361,38 @@ export default function App() {
                           </td>
                           <td className="text-slate-500 dark:text-slate-400">{GIORNI[r.date.getDay()]}</td>
                           {r.special ? (
-                            <td colSpan={3} className="italic text-amber-700 dark:text-amber-400 font-medium">{r.special}</td>
+                            <td colSpan={5} className="italic text-amber-700 dark:text-amber-400 font-medium">{r.special}</td>
                           ) : (
                             <>
-                              <td>{renderPersonName(r.presidente, r.duplicates)}</td>
-                              <td>{renderPersonName(r.preghiera, r.duplicates)}</td>
+                              <td>
+                                {currentUser?.role === 'admin' ? <>
+                                  <input className="mensile-select no-print text-left" value={r.oratore || ''} placeholder="Nome oratore" onChange={e => updateDomenicaField(i, 'oratore', e.target.value)} />
+                                  <span className="print-only">{r.oratore || '—'}</span>
+                                </> : (r.oratore || '—')}
+                              </td>
+                              <td>
+                                {currentUser?.role === 'admin' ? <>
+                                  <select className="mensile-select no-print" value={r.titoloDiscorso || ''} onChange={e => updateDomenicaField(i, 'titoloDiscorso', e.target.value)}>
+                                    <option value="">Seleziona il tema…</option>
+                                    {TITOLI_DISCORSI_PUBBLICI.map((title, index) => <option key={index} value={title}>{title}</option>)}
+                                  </select>
+                                  <span className="print-only">{r.titoloDiscorso || '—'}</span>
+                                </> : (r.titoloDiscorso || '—')}
+                              </td>
+                              {(['presidente', 'preghiera'] as const).map(field => {
+                                const eligible = state.people.filter(person => field === 'presidente' ? person.roles.presidente : person.roles.preghiera);
+                                const current = r[field] || '';
+                                return <td key={field}>
+                                  {currentUser?.role === 'admin' ? <>
+                                    <select className="mensile-select no-print" value={current} onChange={e => updateDomenicaField(i, field, e.target.value)}>
+                                      <option value="">—</option>
+                                      {current && !eligible.some(person => person.name === current) && <option value={current}>{current} (non abilitato)</option>}
+                                      {eligible.map(person => <option key={person.id} value={person.name}>{person.name}</option>)}
+                                    </select>
+                                    <span className="print-only">{current || '—'}</span>
+                                  </> : renderPersonName(current, r.duplicates)}
+                                </td>;
+                              })}
                               <td>{renderPersonName(r.lettore, r.duplicates)}</td>
                             </>
                           )}
