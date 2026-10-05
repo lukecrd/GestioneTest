@@ -1512,37 +1512,37 @@ export default function App() {
 
           {/* Quick statistics */}
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5">
-            <div className="bg-white border border-sky-200/80 rounded-xl p-2.5 text-center shadow-xs">
-              <span className="text-[10px] font-mono font-bold text-sky-600 block uppercase tracking-wider">Totale</span>
-              <span className="text-xl font-black text-sky-950">{state.people.length}</span>
+            <div className="metric-card compact">
+              <div className="metric-value">{state.people.length}</div>
+              <div className="metric-label">Totale</div>
             </div>
-            <div className="bg-white border border-blue-200/80 rounded-xl p-2.5 text-center shadow-xs">
-              <span className="text-[10px] font-mono font-bold text-blue-600 block uppercase tracking-wider">Uomini</span>
-              <span className="text-xl font-black text-blue-950">{countMen}</span>
+            <div className="metric-card compact">
+              <div className="metric-value">{countMen}</div>
+              <div className="metric-label">Uomini</div>
             </div>
-            <div className="bg-white border border-rose-200/80 rounded-xl p-2.5 text-center shadow-xs">
-              <span className="text-[10px] font-mono font-bold text-rose-600 block uppercase tracking-wider">Donne</span>
-              <span className="text-xl font-black text-rose-950">{countWomen}</span>
+            <div className="metric-card compact">
+              <div className="metric-value">{countWomen}</div>
+              <div className="metric-label">Donne</div>
             </div>
-            <div className="bg-white border border-amber-200/80 rounded-xl p-2.5 text-center shadow-xs">
-              <span className="text-[10px] font-mono font-bold text-amber-600 block uppercase tracking-wider">Uscieri</span>
-              <span className="text-xl font-black text-amber-950">{countUscieri}</span>
+            <div className="metric-card compact">
+              <div className="metric-value">{countUscieri}</div>
+              <div className="metric-label">Uscieri</div>
             </div>
-            <div className="bg-white border border-indigo-200/80 rounded-xl p-2.5 text-center shadow-xs">
-              <span className="text-[10px] font-mono font-bold text-indigo-600 block uppercase tracking-wider">Audio/Video</span>
-              <span className="text-xl font-black text-indigo-950">{countConsole}</span>
+            <div className="metric-card compact">
+              <div className="metric-value">{countConsole}</div>
+              <div className="metric-label">Audio/Video</div>
             </div>
-            <div className="bg-white border border-teal-200/80 rounded-xl p-2.5 text-center shadow-xs">
-              <span className="text-[10px] font-mono font-bold text-teal-600 block uppercase tracking-wider">Microfoni</span>
-              <span className="text-xl font-black text-teal-950">{countMic}</span>
+            <div className="metric-card compact">
+              <div className="metric-value">{countMic}</div>
+              <div className="metric-label">Microfoni</div>
             </div>
-            <div className="bg-white border border-purple-200/80 rounded-xl p-2.5 text-center shadow-xs">
-              <span className="text-[10px] font-mono font-bold text-purple-600 block uppercase tracking-wider">Presidenti</span>
-              <span className="text-xl font-black text-purple-950">{countPres}</span>
+            <div className="metric-card compact">
+              <div className="metric-value">{countPres}</div>
+              <div className="metric-label">Presidenti</div>
             </div>
-            <div className="bg-white border border-emerald-200/80 rounded-xl p-2.5 text-center shadow-xs">
-              <span className="text-[10px] font-mono font-bold text-emerald-600 block uppercase tracking-wider">Lettori</span>
-              <span className="text-xl font-black text-emerald-950">{countLett}</span>
+            <div className="metric-card compact">
+              <div className="metric-value">{countLett}</div>
+              <div className="metric-label">Lettori</div>
             </div>
           </div>
 
@@ -2794,11 +2794,7 @@ export default function App() {
               </button>
               <button
                 onClick={confirmModalState.onConfirm}
-                className={`btn-primary text-xs px-4 py-2 ${
-                  confirmModalState.confirmVariant === 'danger'
-                    ? 'bg-rose-600 hover:bg-rose-700 text-white border-transparent'
-                    : ''
-                }`}
+                className={`${confirmModalState.confirmVariant === 'danger' ? 'btn-danger' : 'btn-primary'} text-xs px-4 py-2`}
               >
                 {confirmModalState.confirmText || 'Conferma'}
               </button>
