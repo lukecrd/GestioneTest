@@ -496,6 +496,9 @@
   .no-print, nav, header, button, .btn-ghost, .btn-primary, .btn-danger, .toast {
     display: none !important;
   }
+  .weekend-program > header.weekend-program__banner {
+    display: grid !important;
+  }
   .card {
     border: none !important;
     box-shadow: none !important;
