@@ -1146,9 +1146,22 @@ export default function App() {
   const [domRows, setDomRows] = useState<DomenicaRow[] | null>(null);
   const [domWarn, setDomWarn] = useState<string | null>(null);
   const [domTitle, setDomTitle] = useState<string>('');
-  const domenicaProgramRows = domRows && domRows.length > 0 && domRows.length < 5
-    ? [...domRows, { date: addDays(domRows[domRows.length - 1].date, 7), placeholder: true, oratore: '', congregazione: '', titoloDiscorso: '', presidente: '', preghiera: '', lettore: '' }]
-    : domRows;
+  const importedOctoberRows = domRows?.map(row => {
+    const sample = domTitle === 'Ottobre 2026' ? OCTOBRE_2026_WEEKEND[iso(row.date)] : undefined;
+    if (!sample || row.titoloDiscorso !== undefined) return row;
+    return {
+      ...row,
+      presidente: sample.presidente || '',
+      oratore: sample.oratore || '',
+      congregazione: sample.congregazione || '',
+      titoloDiscorso: sample.titoloDiscorso,
+      lettore: sample.lettore || '',
+      special: sample.assemblea ? sample.titoloDiscorso : row.special,
+    };
+  });
+  const domenicaProgramRows = importedOctoberRows && importedOctoberRows.length > 0 && importedOctoberRows.length < 5
+    ? [...importedOctoberRows, { date: addDays(importedOctoberRows[importedOctoberRows.length - 1].date, 7), placeholder: true, oratore: '', congregazione: '', titoloDiscorso: '', presidente: '', preghiera: '', lettore: '' }]
+    : importedOctoberRows;
 
   const generateDomenica = (y: number, m: number) => {
     if (!checkAdminPermission()) return;
