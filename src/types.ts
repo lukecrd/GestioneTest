@@ -332,7 +332,6 @@ export interface DomenicaRow {
   congregazione?: string;
   titoloDiscorso?: string;
   presidente?: string;
-  preghiera?: string;
   lettore?: string;
   duplicates?: string[];
   warnings?: string[];
