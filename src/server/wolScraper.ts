@@ -1,6 +1,6 @@
 import * as cheerio from 'cheerio';
-import { VitaEMinisteroMeeting, MinisteroPart, VitaCristianaPart } from '../types';
-import { inferPartTypeIds } from '../utils/ministeroPartTypes';
+import type { VitaEMinisteroMeeting, MinisteroPart, VitaCristianaPart } from '../types.js';
+import { inferPartTypeIds } from '../utils/ministeroPartTypes.js';
 
 const WOL_BASE = 'https://wol.jw.org';
 const WOL_INDEX = `${WOL_BASE}/it/wol/library/r6/lp-i/tutte-le-pubblicazioni/guida-per-ladunanza`;

@@ -3,7 +3,7 @@ import {
   getAvailableYears,
   fetchMonthMeetings,
   fetchAllYearMeetings,
-} from './wolScraper';
+} from './wolScraper.js';
 
 export const apiRouter = Router();
 

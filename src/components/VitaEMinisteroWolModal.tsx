@@ -1,3 +1,4 @@
+import { fetchWolJson } from '../utils/wolApi';
 import React, { useState, useEffect } from 'react';
 import { VitaEMinisteroMeeting, MinisteroPart, VitaCristianaPart } from '../types';
 import {
@@ -51,8 +52,7 @@ export function VitaEMinisteroWolModal({
   useEffect(() => {
     if (!isOpen) return;
 
-    fetch('/api/wol/years')
-      .then(r => r.json())
+    fetchWolJson('/api/wol/years')
       .then(data => {
         if (data.success && Array.isArray(data.years) && data.years.length > 0) {
           setAvailableYears(data.years);
@@ -84,16 +84,14 @@ export function VitaEMinisteroWolModal({
       if (syncMode === 'single_month') {
         const monthNum = selectedMonth + 1;
         setLoadingStep(`Scaricamento adunanze di ${MESI_FULL[selectedMonth]} ${selectedYear} da wol.jw.org...`);
-        const res = await fetch(`/api/wol/month?year=${selectedYear}&month=${monthNum}`);
-        const data = await res.json();
+        const data = await fetchWolJson(`/api/wol/month?year=${selectedYear}&month=${monthNum}`);
         if (!data.success) {
           throw new Error(data.error || 'Errore durante il download dal server.');
         }
         fetchedMeetings = data.meetings || [];
       } else {
         setLoadingStep(`Scaricamento di TUTTI i mesi del ${selectedYear} da wol.jw.org (attendere alcuni secondi)...`);
-        const res = await fetch(`/api/wol/year?year=${selectedYear}`);
-        const data = await res.json();
+        const data = await fetchWolJson(`/api/wol/year?year=${selectedYear}`);
         if (!data.success) {
           throw new Error(data.error || 'Errore durante il download dell\'anno dal server.');
         }
