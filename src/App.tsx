@@ -2352,6 +2352,24 @@ export default function App() {
 
           {domenicaProgramRows && (
             <div className="weekend-program">
+              <div className="no-print flex flex-wrap justify-end gap-2 p-3">
+                <button onClick={() => window.print()} className="btn-ghost" title="Apri la stampa del programma">
+                  <Printer className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                  <span>Stampa</span>
+                </button>
+                <button onClick={() => window.print()} className="btn-ghost" title="Scegli Salva come PDF nella finestra di stampa">
+                  <Download className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                  <span>Esporta PDF</span>
+                </button>
+                <button
+                  onClick={exportDomenicaToExcel}
+                  className="btn-ghost text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 hover:bg-emerald-100"
+                  title="Esporta in formato Excel (.xlsx)"
+                >
+                  <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                  <span>Esporta Excel (.xlsx)</span>
+                </button>
+              </div>
               <header className="weekend-program__banner">
                 <div className="weekend-program__banner-title">
                   <img className="weekend-program__banner-image" src="/adunanza-header.jpg" alt="" />
