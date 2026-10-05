@@ -37,10 +37,6 @@ import {
   Activity,
   Radio,
   BookOpen,
-  LogIn,
-  Mic,
-  MonitorPlay,
-  Armchair,
 } from 'lucide-react';
 import { Person, StateData, MensileRow, DomenicaRow, ArchivedProgram, AuthUser, ChecklistProgramKey } from './types';
 import { StatsView } from './components/StatsView';
@@ -2217,21 +2213,21 @@ export default function App() {
                 </p>
               )}
               <div className="prog-banner">
-                <div className="prog-title">Programma</div>
-                <div className="prog-sub">Uscieri - Microfonisti - Audio / Video - Riassetto e Pulizie</div>
-                <div className="prog-month">{menTitle}</div>
+                <img className="prog-banner__image" src="/programma-mensile-header.jpg" alt="" />
+                <div className="prog-title">Programma<br />Uscieri - Microfonisti - Audio / Video -<br />Riassetto e Pulizie</div>
+                <div className="prog-month">Mese di {menTitle}</div>
               </div>
               <div className="table-wrapper">
                 <table className="prog-table">
                   <thead>
                     <tr>
                       <th className="w-week" rowSpan={2}>Settimana<br />del:</th>
-                      <th><LogIn className="prog-th-icon" /><div>Uscieri ingresso</div></th>
-                      <th><Users className="prog-th-icon" /><div>Usciere<br />Auditorium</div></th>
-                      <th><Mic className="prog-th-icon" /><div>Microfonisti</div></th>
-                      <th><MonitorPlay className="prog-th-icon" /><div>Audio / Video</div></th>
-                      <th><Armchair className="prog-th-icon" /><div>Riassetto</div></th>
-                      <th><Sparkles className="prog-th-icon" /><div>Pulizie del<br />fine settimana</div></th>
+                      <th><div>Uscieri ingresso</div><img className="prog-th-image" src="/mensile-ingresso.jpg" alt="" /></th>
+                      <th><div>Usciere<br />Auditorium</div><img className="prog-th-image" src="/mensile-auditorium.jpg" alt="" /></th>
+                      <th><div>Microfonisti</div><img className="prog-th-image" src="/mensile-microfoni.jpg" alt="" /></th>
+                      <th><div>Audio Video</div><img className="prog-th-image" src="/mensile-audio-video.jpg" alt="" /></th>
+                      <th><div>Riassetto</div><img className="prog-th-image" src="/mensile-riassetto.jpg" alt="" /></th>
+                      <th><div>Pulizie del<br />fine settimana</div><img className="prog-th-image" src="/mensile-pulizie.jpg" alt="" /></th>
                     </tr>
                     <tr className="prog-subheader">
                       <th>Nominativo</th>

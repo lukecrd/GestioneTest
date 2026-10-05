@@ -337,27 +337,47 @@
 
 .print-sheet {
   background: #ffffff;
-  border: 1px solid #cbd5e1;
-  border-radius: 0.75rem;
-  padding: 1.25rem;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  border: 1px solid #111;
+  border-radius: 0;
+  padding: 0;
+  box-shadow: none;
 }
 
 .prog-banner {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   text-align: center;
-  padding: 0.9rem 1rem 1.1rem;
-  margin-bottom: 1rem;
-  border: 1px solid #bae6fd;
-  border-radius: 0.6rem;
-  background: linear-gradient(180deg, #e0f2fe 0%, #f0f9ff 100%);
+  display: flex;
+  min-height: 174px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0.8rem 1rem;
+  margin-bottom: 0;
+  border: 1px solid #111;
+  background: #e5f0f2;
+}
+
+.prog-banner__image {
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .prog-title {
-  font-size: 1.35rem;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: clamp(1.1rem, 2.2vw, 1.65rem);
   font-weight: 800;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  color: #0c4a6e;
+  font-variant: small-caps;
+  line-height: 1.12;
+  letter-spacing: 0.015em;
+  text-transform: none;
+  color: #111;
+  text-shadow: 0 1px 5px rgba(255, 255, 255, 0.8);
 }
 
 .prog-sub {
@@ -371,7 +391,8 @@
 
 .prog-month {
   margin-top: 0.4rem;
-  font-size: 1.05rem;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-size: 1.3rem;
   font-weight: 800;
   text-transform: uppercase;
   color: #0f172a;
@@ -379,40 +400,41 @@
 
 .prog-table {
   width: 100%;
-  min-width: 720px;
+  min-width: 760px;
   border-collapse: collapse;
   font-size: 0.82rem;
 }
 
 .prog-table th,
 .prog-table td {
-  border: 1px solid #cbd5e1;
+  border: 1px solid #555;
   padding: 0.45rem 0.5rem;
   text-align: center;
   vertical-align: middle;
 }
 
 .prog-table thead tr:first-child th {
-  background: #f1f5f9;
+  background: #f2f2f2;
   color: #0f172a;
   font-weight: 800;
   font-size: 0.78rem;
-  padding-top: 0.6rem;
+  padding: 0.55rem 0.3rem 0.2rem;
 }
 
-.prog-th-icon {
+.prog-th-image {
   display: block;
-  width: 20px;
-  height: 20px;
-  margin: 0 auto 0.3rem;
-  color: #0284c7;
+  width: 100%;
+  height: 100px;
+  margin: 0.3rem auto 0;
+  object-fit: contain;
+  background: #fff0dc;
 }
 
 .prog-subheader th {
-  background: #f8fafc;
-  color: #64748b;
+  background: #fff;
+  color: #222;
   font-weight: 700;
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   padding: 0.3rem 0.5rem;
