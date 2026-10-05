@@ -23,10 +23,13 @@ function deserializeMensileRows(rows: any[] | null): MensileRow[] | null {
 
 function serializeDomenicaRows(rows: DomenicaRow[] | null) {
   if (!rows) return null;
-  return rows.map(r => ({
-    ...r,
-    date: r.date instanceof Date ? r.date.toISOString() : r.date,
-  }));
+  return rows.map(r => {
+    const { preghiera: _legacyPrayer, ...programRow } = r as DomenicaRow & { preghiera?: string };
+    return {
+      ...programRow,
+      date: r.date instanceof Date ? r.date.toISOString() : r.date,
+    };
+  });
 }
 
 function deserializeDomenicaRows(rows: any[] | null): DomenicaRow[] | null {
