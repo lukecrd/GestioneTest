@@ -948,17 +948,16 @@ export default function App() {
       ['Programma Adunanza del Fine Settimana', '', '', '', '', ''],
       [`${domTitle}`, '', '', '', '', ''],
       ['', '', '', '', '', ''],
-      ['Domenica', 'Presidente', 'Preghiera', 'Oratore', 'Congregazione', 'Tema Discorso', 'Lettore TdG'],
+      ['Domenica', 'Presidente', 'Oratore', 'Congregazione', 'Tema Discorso', 'Lettore TdG'],
     ];
 
     domenicaProgramRows.forEach(r => {
       if (r.special) {
-        rows.push([r.placeholder ? 'Domenica' : `${GIORNI[r.date.getDay()]} ${fmtDate(r.date)}`, r.presidente || '', r.preghiera || '', r.oratore || '', r.congregazione || '', r.titoloDiscorso ?? r.special ?? '', r.lettore || '']);
+        rows.push([r.placeholder ? 'Domenica' : `${GIORNI[r.date.getDay()]} ${fmtDate(r.date)}`, r.presidente || '', r.oratore || '', r.congregazione || '', r.titoloDiscorso ?? r.special ?? '', r.lettore || '']);
       } else {
         rows.push([
           r.placeholder ? 'Domenica' : `${GIORNI[r.date.getDay()]} ${fmtDate(r.date)}`,
           r.presidente || '---',
-          r.preghiera || '---',
           r.oratore || '---',
           r.congregazione || '---',
           r.titoloDiscorso || '---',
@@ -969,12 +968,11 @@ export default function App() {
 
     const worksheet = XLSX.utils.aoa_to_sheet(rows);
     worksheet['!merges'] = [
-      { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } },
-      { s: { r: 1, c: 0 }, e: { r: 1, c: 6 } },
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 5 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: 5 } },
     ];
     worksheet['!cols'] = [
       { wch: 22 },
-      { wch: 24 },
       { wch: 24 },
       { wch: 26 },
       { wch: 26 },
@@ -1160,34 +1158,31 @@ export default function App() {
     };
   });
   const domenicaProgramRows = importedOctoberRows && importedOctoberRows.length > 0 && importedOctoberRows.length < 5
-    ? [...importedOctoberRows, { date: addDays(importedOctoberRows[importedOctoberRows.length - 1].date, 7), placeholder: true, oratore: '', congregazione: '', titoloDiscorso: '', presidente: '', preghiera: '', lettore: '' }]
+    ? [...importedOctoberRows, { date: addDays(importedOctoberRows[importedOctoberRows.length - 1].date, 7), placeholder: true, oratore: '', congregazione: '', titoloDiscorso: '', presidente: '', lettore: '' }]
     : importedOctoberRows;
 
   const generateDomenica = (y: number, m: number) => {
     if (!checkAdminPermission()) return;
     const sundays = sundayDates(y, m);
     const presPool = state.people.filter(p => p.roles.presidente);
-    const pregPool = state.people.filter(p => p.roles.preghiera);
     const lettPool = state.people.filter(p => p.roles.lettore);
     const pc: Record<string, number> = {}, pl: Record<string, number> = {};
-    const rc: Record<string, number> = {}, rl: Record<string, number> = {};
     const lc: Record<string, number> = {}, ll: Record<string, number> = {};
 
     const rows: DomenicaRow[] = [];
     const warnings: string[] = [];
     if (presPool.length < 1) warnings.push('Nessun Presidente abilitato.');
-    if (pregPool.length < 1) warnings.push('Nessuno abilitato per la Preghiera finale.');
     if (lettPool.length < 1) warnings.push('Nessun Lettore Torre di Guardia abilitato.');
 
     sundays.forEach((sun, idx) => {
       const key = iso(sun);
       const sample = y === 2026 && m === 9 ? OCTOBRE_2026_WEEKEND[key] : undefined;
       if (state.special[key]) {
-        rows.push({ date: sun, special: state.special[key], oratore: '', congregazione: '', titoloDiscorso: state.special[key], presidente: '', preghiera: '', lettore: '' });
+        rows.push({ date: sun, special: state.special[key], oratore: '', congregazione: '', titoloDiscorso: state.special[key], presidente: '', lettore: '' });
         return;
       }
       if (sample?.assemblea) {
-        rows.push({ date: sun, special: sample.titoloDiscorso, oratore: '', congregazione: '', titoloDiscorso: sample.titoloDiscorso, presidente: '', preghiera: '', lettore: '' });
+        rows.push({ date: sun, special: sample.titoloDiscorso, oratore: '', congregazione: '', titoloDiscorso: sample.titoloDiscorso, presidente: '', lettore: '' });
         return;
       }
       const wed = addDays(sun, 3);
@@ -1196,9 +1191,6 @@ export default function App() {
 
       const pres = fairPick(presPool, pc, pl, idx, used);
       if (pres) { markUsed(pres, pc, pl, idx); used.push(pres.id); }
-
-      const preg = fairPick(pregPool, rc, rl, idx, used);
-      if (preg) { markUsed(preg, rc, rl, idx); used.push(preg.id); }
 
       const lett = fairPick(lettPool, lc, ll, idx, used);
       if (lett) { markUsed(lett, lc, ll, idx); used.push(lett.id); }
@@ -1209,14 +1201,12 @@ export default function App() {
         congregazione: sample?.congregazione || '',
         titoloDiscorso: sample?.titoloDiscorso || '',
         presidente: sample?.presidente || pres?.name || '—',
-        preghiera: preg?.name || '—',
         lettore: sample?.lettore || lett?.name || '—',
       };
 
       // Validation check for duplicates
       const roleAssignments: { name: string; role: string }[] = [];
       if (row.presidente && row.presidente !== '—') roleAssignments.push({ name: row.presidente, role: 'Presidente' });
-      if (row.preghiera && row.preghiera !== '—') roleAssignments.push({ name: row.preghiera, role: 'Preghiera' });
       if (row.lettore && row.lettore !== '—') roleAssignments.push({ name: row.lettore, role: 'Lettore' });
 
       const nameMap: Record<string, string[]> = {};
@@ -1251,7 +1241,6 @@ export default function App() {
         congregazione: '',
         titoloDiscorso: '',
         presidente: '',
-        preghiera: '',
         lettore: '',
       });
     }
@@ -1270,14 +1259,14 @@ export default function App() {
     });
   };
 
-  const updateDomenicaField = (rowIndex: number, field: 'oratore' | 'congregazione' | 'titoloDiscorso' | 'presidente' | 'preghiera' | 'lettore', value: string) => {
+  const updateDomenicaField = (rowIndex: number, field: 'oratore' | 'congregazione' | 'titoloDiscorso' | 'presidente' | 'lettore', value: string) => {
     if (!checkAdminPermission() || !domenicaProgramRows) return;
     const updatedRows = domenicaProgramRows.map((row, index) => index === rowIndex ? { ...row, [field]: value } : row);
     setDomRows(updatedRows);
     syncActivePrograms({ domRows: updatedRows });
   };
 
-  const renderDomenicaField = (rowIndex: number, field: 'oratore' | 'congregazione' | 'titoloDiscorso' | 'presidente' | 'preghiera' | 'lettore', value?: string) => {
+  const renderDomenicaField = (rowIndex: number, field: 'oratore' | 'congregazione' | 'titoloDiscorso' | 'presidente' | 'lettore', value?: string) => {
     const current = value && value !== '—' ? value : '';
     if (currentUser?.role !== 'admin') return current;
 
@@ -1295,7 +1284,7 @@ export default function App() {
       </>;
     }
 
-    const role = field === 'presidente' ? 'presidente' : field === 'preghiera' ? 'preghiera' : 'lettore';
+    const role = field === 'presidente' ? 'presidente' : 'lettore';
     const eligible = state.people.filter(person => person.roles[role]);
     return <>
       <select className="weekend-program__edit no-print" value={current} onChange={e => updateDomenicaField(rowIndex, field, e.target.value)}>
@@ -2316,7 +2305,7 @@ export default function App() {
             <div>
               <p className="page-eyebrow">Programmi</p>
               <h1 className="page-title">Adunanza domenica</h1>
-              <p className="page-description">Pianifica oratore, titolo del discorso pubblico, presidente, preghiera finale e lettore per le domeniche del mese.</p>
+              <p className="page-description">Pianifica oratore, titolo del discorso pubblico, presidente e lettore per le domeniche del mese.</p>
             </div>
           </div>
           <div className="card no-print">
@@ -2325,7 +2314,7 @@ export default function App() {
               <h2 className="card-title">Genera programma Adunanza Domenica</h2>
             </div>
             <p className="text-slate-500 dark:text-slate-400 text-xs mt-1">
-              Per ogni domenica: oratore e discorso pubblico, Presidente, Preghiera finale e Lettore Torre di Guardia. Rotazione equa; una persona non ricopre due ruoli nella stessa adunanza. Rispetta indisponibilità e date speciali.
+              Per ogni domenica: oratore e discorso pubblico, Presidente e Lettore Torre di Guardia. Rotazione equa; una persona non ricopre due ruoli nella stessa adunanza. Rispetta indisponibilità e date speciali.
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 mt-4">
               <div className="flex flex-col gap-1">
@@ -2385,9 +2374,6 @@ export default function App() {
                       <dl>
                         <div className="weekend-program__line">
                           <dt>Presidente</dt><dd>{renderDomenicaField(index, 'presidente', row.presidente)}</dd>
-                        </div>
-                        <div className="weekend-program__line">
-                          <dt>Preghiera</dt><dd>{renderDomenicaField(index, 'preghiera', row.preghiera)}</dd>
                         </div>
                         <div className="weekend-program__line">
                           <dt>Oratore</dt><dd>{renderDomenicaField(index, 'oratore', row.oratore)}</dd>
