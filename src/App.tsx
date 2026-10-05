@@ -66,6 +66,12 @@ const STORAGE_KEY = 'dashboard_congregazione_v2';
 const GIORNI = ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'];
 const MESI = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
 const MESI_ABBR = ['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'];
+const OCTOBRE_2026_WEEKEND: Record<string, { presidente?: string; oratore?: string; congregazione?: string; titoloDiscorso: string; lettore?: string; assemblea?: boolean }> = {
+  '2026-10-04': { presidente: 'Giuseppe Facchi', oratore: 'Antonio Gramegna', congregazione: 'Gavorrano', titoloDiscorso: 'Impariamo dal diluvio dei giorni di Noè', lettore: 'Michele Verzeletti' },
+  '2026-10-11': { presidente: 'Jacopo Pastorelli', oratore: 'Matteo Cannistraci', congregazione: 'Marciana Marina', titoloDiscorso: 'Imitiamo il Padre delle tenere misericordie', lettore: 'Luca Cardelli' },
+  '2026-10-18': { presidente: 'Tonino Beniamini', oratore: 'Peter Semprevivo', congregazione: 'Orbetello', titoloDiscorso: 'Chi è qualificato per fare discepoli?', lettore: 'Marco D’Angiolella' },
+  '2026-10-25': { titoloDiscorso: 'Assemblea di Circoscrizione con il Rappresentante della filiale', assemblea: true },
+};
 
 const _mem: Record<string, string> = {};
 const storage = {
@@ -937,24 +943,25 @@ export default function App() {
   };
 
   const exportDomenicaToExcel = () => {
-    if (!domRows) return;
+    if (!domenicaProgramRows) return;
     const rows: (string | number)[][] = [
       ['Programma Adunanza del Fine Settimana', '', '', '', '', ''],
       [`${domTitle}`, '', '', '', '', ''],
       ['', '', '', '', '', ''],
-      ['Data', 'Oratore', 'Titolo discorso pubblico', 'Presidente', 'Preghiera finale', 'Lettore Torre di Guardia'],
+      ['Domenica', 'Presidente', 'Preghiera', 'Oratore', 'Congregazione', 'Tema Discorso', 'Lettore TdG'],
     ];
 
-    domRows.forEach(r => {
+    domenicaProgramRows.forEach(r => {
       if (r.special) {
-        rows.push([`${GIORNI[r.date.getDay()]} ${fmtDate(r.date)}`, r.special, '', '', '', '']);
+        rows.push([r.placeholder ? 'Domenica' : `${GIORNI[r.date.getDay()]} ${fmtDate(r.date)}`, r.presidente || '', r.preghiera || '', r.oratore || '', r.congregazione || '', r.titoloDiscorso ?? r.special ?? '', r.lettore || '']);
       } else {
         rows.push([
-          `${GIORNI[r.date.getDay()]} ${fmtDate(r.date)}`,
-          r.oratore || '---',
-          r.titoloDiscorso || '---',
+          r.placeholder ? 'Domenica' : `${GIORNI[r.date.getDay()]} ${fmtDate(r.date)}`,
           r.presidente || '---',
           r.preghiera || '---',
+          r.oratore || '---',
+          r.congregazione || '---',
+          r.titoloDiscorso || '---',
           r.lettore || '---',
         ]);
       }
@@ -962,16 +969,17 @@ export default function App() {
 
     const worksheet = XLSX.utils.aoa_to_sheet(rows);
     worksheet['!merges'] = [
-      { s: { r: 0, c: 0 }, e: { r: 0, c: 5 } },
-      { s: { r: 1, c: 0 }, e: { r: 1, c: 5 } },
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 6 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: 6 } },
     ];
     worksheet['!cols'] = [
-      { wch: 25 },
+      { wch: 22 },
       { wch: 24 },
+      { wch: 24 },
+      { wch: 26 },
+      { wch: 26 },
       { wch: 55 },
-      { wch: 25 },
-      { wch: 25 },
-      { wch: 28 },
+      { wch: 24 },
     ];
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Adunanza Domenica');
@@ -1138,6 +1146,9 @@ export default function App() {
   const [domRows, setDomRows] = useState<DomenicaRow[] | null>(null);
   const [domWarn, setDomWarn] = useState<string | null>(null);
   const [domTitle, setDomTitle] = useState<string>('');
+  const domenicaProgramRows = domRows && domRows.length > 0 && domRows.length < 5
+    ? [...domRows, { date: addDays(domRows[domRows.length - 1].date, 7), placeholder: true, oratore: '', congregazione: '', titoloDiscorso: '', presidente: '', preghiera: '', lettore: '' }]
+    : domRows;
 
   const generateDomenica = (y: number, m: number) => {
     if (!checkAdminPermission()) return;
@@ -1157,8 +1168,13 @@ export default function App() {
 
     sundays.forEach((sun, idx) => {
       const key = iso(sun);
+      const sample = y === 2026 && m === 9 ? OCTOBRE_2026_WEEKEND[key] : undefined;
       if (state.special[key]) {
-        rows.push({ date: sun, special: state.special[key] });
+        rows.push({ date: sun, special: state.special[key], oratore: '', congregazione: '', titoloDiscorso: state.special[key], presidente: '', preghiera: '', lettore: '' });
+        return;
+      }
+      if (sample?.assemblea) {
+        rows.push({ date: sun, special: sample.titoloDiscorso, oratore: '', congregazione: '', titoloDiscorso: sample.titoloDiscorso, presidente: '', preghiera: '', lettore: '' });
         return;
       }
       const wed = addDays(sun, 3);
@@ -1176,11 +1192,12 @@ export default function App() {
 
       const row: DomenicaRow = {
         date: sun,
-        oratore: '',
-        titoloDiscorso: '',
-        presidente: pres?.name || '—',
+        oratore: sample?.oratore || '',
+        congregazione: sample?.congregazione || '',
+        titoloDiscorso: sample?.titoloDiscorso || '',
+        presidente: sample?.presidente || pres?.name || '—',
         preghiera: preg?.name || '—',
-        lettore: lett?.name || '—',
+        lettore: sample?.lettore || lett?.name || '—',
       };
 
       // Validation check for duplicates
@@ -1213,6 +1230,19 @@ export default function App() {
       rows.push(row);
     });
 
+    if (sundays.length > 0 && sundays.length < 5) {
+      rows.push({
+        date: addDays(sundays[sundays.length - 1], 7),
+        placeholder: true,
+        oratore: '',
+        congregazione: '',
+        titoloDiscorso: '',
+        presidente: '',
+        preghiera: '',
+        lettore: '',
+      });
+    }
+
     const title = `${MESI[m]} ${y}`;
     const warn = warnings.join(' ') || null;
     setDomTitle(title);
@@ -1227,11 +1257,41 @@ export default function App() {
     });
   };
 
-  const updateDomenicaField = (rowIndex: number, field: 'oratore' | 'titoloDiscorso' | 'presidente' | 'preghiera', value: string) => {
-    if (!checkAdminPermission() || !domRows) return;
-    const updatedRows = domRows.map((row, index) => index === rowIndex ? { ...row, [field]: value } : row);
+  const updateDomenicaField = (rowIndex: number, field: 'oratore' | 'congregazione' | 'titoloDiscorso' | 'presidente' | 'preghiera' | 'lettore', value: string) => {
+    if (!checkAdminPermission() || !domenicaProgramRows) return;
+    const updatedRows = domenicaProgramRows.map((row, index) => index === rowIndex ? { ...row, [field]: value } : row);
     setDomRows(updatedRows);
     syncActivePrograms({ domRows: updatedRows });
+  };
+
+  const renderDomenicaField = (rowIndex: number, field: 'oratore' | 'congregazione' | 'titoloDiscorso' | 'presidente' | 'preghiera' | 'lettore', value?: string) => {
+    const current = value && value !== '—' ? value : '';
+    if (currentUser?.role !== 'admin') return current;
+
+    if (field === 'oratore' || field === 'congregazione' || field === 'titoloDiscorso') {
+      const placeholder = field === 'oratore' ? 'Nome oratore' : field === 'congregazione' ? 'Congregazione' : 'Seleziona o scrivi il tema';
+      return <>
+        <input
+          className={`weekend-program__edit no-print${field === 'titoloDiscorso' ? ' weekend-program__edit--topic' : ''}`}
+          value={current}
+          placeholder={placeholder}
+          list={field === 'titoloDiscorso' ? 'titoli-discorso-pubblico' : undefined}
+          onChange={e => updateDomenicaField(rowIndex, field, e.target.value)}
+        />
+        <span className="weekend-program__value print-only">{current}</span>
+      </>;
+    }
+
+    const role = field === 'presidente' ? 'presidente' : field === 'preghiera' ? 'preghiera' : 'lettore';
+    const eligible = state.people.filter(person => person.roles[role]);
+    return <>
+      <select className="weekend-program__edit no-print" value={current} onChange={e => updateDomenicaField(rowIndex, field, e.target.value)}>
+        <option value="">—</option>
+        {current && !eligible.some(person => person.name === current) && <option value={current}>{current} (non abilitato)</option>}
+        {eligible.map(person => <option key={person.id} value={person.name}>{person.name}</option>)}
+      </select>
+      <span className="weekend-program__value print-only">{current}</span>
+    </>;
   };
 
   // --- INDISPONIBILITÀ & DATE SPECIALI ---
@@ -2288,121 +2348,52 @@ export default function App() {
             </div>
           </div>
 
-          {domRows && (
-            <div className="card">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-2 border-b border-slate-100 dark:border-slate-800 no-print">
-                <div className="flex items-center gap-2">
-                  <Calendar className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                  <h2 className="card-title">Adunanza Domenica — <span className="text-indigo-600 dark:text-indigo-400 font-bold">{domTitle}</span></h2>
+          {domenicaProgramRows && (
+            <div className="weekend-program">
+              <header className="weekend-program__banner">
+                <div className="weekend-program__banner-title">
+                  <img className="weekend-program__banner-image" src="/adunanza-header.jpg" alt="" />
+                  <h2>Programma Adunanza del fine settimana</h2>
+                  <p>Mese di {domTitle.split(' ')[0] || MESI[domMonth]}</p>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button onClick={() => window.print()} className="btn-ghost" title="Stampa o salva in PDF">
-                    <Printer className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                    <span>Stampa / PDF</span>
-                  </button>
-                  <button
-                    onClick={exportDomenicaToExcel}
-                    className="btn-ghost text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 hover:bg-emerald-100"
-                    title="Esporta in formato Excel (.xlsx)"
-                  >
-                    <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                    <span>Esporta Excel (.xlsx)</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (!domRows) return;
-                      const header = ['Data', 'Giorno', 'Oratore', 'Titolo discorso pubblico', 'Presidente', 'Preghiera finale', 'Lettore Torre di Guardia'];
-                      const data = domRows.map(r => r.special
-                        ? [fmtDate(r.date), GIORNI[r.date.getDay()], r.special, '', '', '', '']
-                        : [fmtDate(r.date), GIORNI[r.date.getDay()], r.oratore || '', r.titoloDiscorso || '', r.presidente, r.preghiera, r.lettore]);
-                      downloadCsv('adunanza_domenica_' + domTitle.replace(/\s+/g, '_') + '.csv', header, data);
-                    }}
-                    className="btn-ghost text-slate-500 text-xs"
-                    title="Esporta CSV grezzo"
-                  >
-                    <Download className="w-3.5 h-3.5" />
-                    <span>CSV</span>
-                  </button>
-                  <button
-                    onClick={resetDomenicaProgram}
-                    className="btn-ghost text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/40"
-                    title="Azzera e svuota i turni dell'adunanza domenica"
-                  >
-                    <RotateCcw className="w-4 h-4" />
-                    <span>Azzera Turni</span>
-                  </button>
+                <div className="weekend-program__illustration-wrap">
+                  <img className="weekend-program__illustration" src="/adunanza-illustrazione.jpg" alt="Oratore che tiene un discorso davanti alla congregazione" />
                 </div>
+              </header>
+              <datalist id="titoli-discorso-pubblico">
+                {TITOLI_DISCORSI_PUBBLICI.map((title, index) => <option key={index} value={title} />)}
+              </datalist>
+              <div className="weekend-program__weeks">
+                {domenicaProgramRows.map((row, index) => {
+                  const dateLabel = row.placeholder ? 'Domenica' : `Domenica ${String(row.date.getDate()).padStart(2, '0')}`;
+                  return (
+                    <article key={`${row.date.toISOString()}-${index}`} className="weekend-program__week">
+                      <h3>{dateLabel}</h3>
+                      <dl>
+                        <div className="weekend-program__line">
+                          <dt>Presidente</dt><dd>{renderDomenicaField(index, 'presidente', row.presidente)}</dd>
+                        </div>
+                        <div className="weekend-program__line">
+                          <dt>Preghiera</dt><dd>{renderDomenicaField(index, 'preghiera', row.preghiera)}</dd>
+                        </div>
+                        <div className="weekend-program__line">
+                          <dt>Oratore</dt><dd>{renderDomenicaField(index, 'oratore', row.oratore)}</dd>
+                        </div>
+                        <div className="weekend-program__line">
+                          <dt>Congregazione</dt><dd>{renderDomenicaField(index, 'congregazione', row.congregazione)}</dd>
+                        </div>
+                        <div className="weekend-program__line weekend-program__line--topic">
+                          <dt>Tema Discorso</dt><dd>{renderDomenicaField(index, 'titoloDiscorso', row.titoloDiscorso ?? row.special)}</dd>
+                        </div>
+                        <div className="weekend-program__line">
+                          <dt>Lettore TdG</dt><dd>{renderDomenicaField(index, 'lettore', row.lettore)}</dd>
+                        </div>
+                      </dl>
+                    </article>
+                  );
+                })}
               </div>
-              <div className="table-wrapper border border-slate-200 dark:border-slate-800 rounded-xl">
-                <table className="tbl">
-                  <thead>
-                    <tr>
-                      <th>Data</th>
-                      <th>Giorno</th>
-                      <th>Oratore</th>
-                      <th>Discorso pubblico</th>
-                      <th>Presidente</th>
-                      <th>Preghiera finale</th>
-                      <th>Lettore Torre di Guardia</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {domRows.map((r, i) => {
-                      const hasDup = r.duplicates && r.duplicates.length > 0;
-                      return (
-                        <tr key={i} className={hasDup ? "bg-amber-50/60 dark:bg-amber-950/20" : undefined}>
-                          <td>
-                            <div className="flex items-center gap-1.5 font-medium">
-                              {hasDup && (
-                                <span className="text-amber-600 font-bold text-sm" title={r.warnings?.join('\n')}>⚠</span>
-                              )}
-                              <span>{fmtDate(r.date)}</span>
-                            </div>
-                          </td>
-                          <td className="text-slate-500 dark:text-slate-400">{GIORNI[r.date.getDay()]}</td>
-                          {r.special ? (
-                            <td colSpan={5} className="italic text-amber-700 dark:text-amber-400 font-medium">{r.special}</td>
-                          ) : (
-                            <>
-                              <td>
-                                {currentUser?.role === 'admin' ? <>
-                                  <input className="mensile-select no-print text-left" value={r.oratore || ''} placeholder="Nome oratore" onChange={e => updateDomenicaField(i, 'oratore', e.target.value)} />
-                                  <span className="print-only">{r.oratore || '—'}</span>
-                                </> : (r.oratore || '—')}
-                              </td>
-                              <td>
-                                {currentUser?.role === 'admin' ? <>
-                                  <select className="mensile-select no-print" value={r.titoloDiscorso || ''} onChange={e => updateDomenicaField(i, 'titoloDiscorso', e.target.value)}>
-                                    <option value="">Seleziona il tema…</option>
-                                    {TITOLI_DISCORSI_PUBBLICI.map((title, index) => <option key={index} value={title}>{title}</option>)}
-                                  </select>
-                                  <span className="print-only">{r.titoloDiscorso || '—'}</span>
-                                </> : (r.titoloDiscorso || '—')}
-                              </td>
-                              {(['presidente', 'preghiera'] as const).map(field => {
-                                const eligible = state.people.filter(person => field === 'presidente' ? person.roles.presidente : person.roles.preghiera);
-                                const current = r[field] || '';
-                                return <td key={field}>
-                                  {currentUser?.role === 'admin' ? <>
-                                    <select className="mensile-select no-print" value={current} onChange={e => updateDomenicaField(i, field, e.target.value)}>
-                                      <option value="">—</option>
-                                      {current && !eligible.some(person => person.name === current) && <option value={current}>{current} (non abilitato)</option>}
-                                      {eligible.map(person => <option key={person.id} value={person.name}>{person.name}</option>)}
-                                    </select>
-                                    <span className="print-only">{current || '—'}</span>
-                                  </> : renderPersonName(current, r.duplicates)}
-                                </td>;
-                              })}
-                              <td>{renderPersonName(r.lettore, r.duplicates)}</td>
-                            </>
-                          )}
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              {domWarn && <div className="warn"><AlertTriangle className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400" /> <span>{domWarn}</span></div>}
+              {domWarn && <div className="warn no-print"><AlertTriangle className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400" /> <span>{domWarn}</span></div>}
             </div>
           )}
         </section>
