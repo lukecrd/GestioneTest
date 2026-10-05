@@ -1,4 +1,4 @@
-import { MinisteroPartTypeDef, VitaEMinisteroParticipantRoles } from '../types';
+import type { MinisteroPartTypeDef, VitaEMinisteroParticipantRoles } from '../types.js';
 
 // Lista fissa di base. Non rimovibile dall'amministratore (isDefault: true),
 // ma può essere estesa con nuovi tipi tramite VitaEMinisteroData.ministeroPartTypes.
