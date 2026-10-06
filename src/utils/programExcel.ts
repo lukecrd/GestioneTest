@@ -34,8 +34,11 @@ export async function buildProgramSheet(book: Workbook, root: HTMLElement) {
   if (table?.rows[0]) {
     const total = table.getBoundingClientRect().width;
     let column = 1;
-    if (total > 0) for (const cell of Array.from(table.rows[0].cells)) {
-      const width = 100 * cell.getBoundingClientRect().width / total / cell.colSpan;
+    const widthRow = Array.from(table.rows).find(row => row.cells.length === columns) || table.rows[0];
+    if (total > 0) for (const cell of Array.from(widthRow.cells)) {
+      const width = root.classList.contains('field-service-print')
+        ? (cell.getBoundingClientRect().width / cell.colSpan - 5) / 7
+        : 100 * cell.getBoundingClientRect().width / total / cell.colSpan;
       for (let n = 0; n < cell.colSpan; n++) sheet.getColumn(column++).width = width;
     }
   }
@@ -49,7 +52,7 @@ export async function buildProgramSheet(book: Workbook, root: HTMLElement) {
     const style = view.getComputedStyle(element);
     const fontSize = Math.max(9, Math.min(22, parseFloat(style.fontSize) * 0.75 || 10));
     cell.value = text;
-    cell.font = { name: /Georgia|Times/.test(style.fontFamily) ? 'Georgia' : 'Arial', size: fontSize, bold: Number(style.fontWeight) >= 600 || style.fontWeight === 'bold', italic: style.fontStyle === 'italic', color: { argb: color(style.color, 'FF000000') } };
+    cell.font = { name: /Calibri/.test(style.fontFamily) ? 'Calibri' : /Georgia|Times/.test(style.fontFamily) ? 'Georgia' : 'Arial', size: fontSize, bold: Number(style.fontWeight) >= 600 || style.fontWeight === 'bold', italic: style.fontStyle === 'italic', color: { argb: color(style.color, 'FF000000') } };
     cell.alignment = { wrapText: true, vertical: 'middle', horizontal: style.textAlign === 'right' ? 'right' : style.textAlign === 'center' ? 'center' : 'left' };
     let background = color(style.backgroundColor, '');
     let parent = element.parentElement;
@@ -95,13 +98,41 @@ export async function buildProgramSheet(book: Workbook, root: HTMLElement) {
           const first = col;
           const last = col + td.colSpan - 1;
           cellBlock(td, nextRow, first, last, true);
+          const banner = td.querySelector<HTMLElement>('.field-service-banner');
+          if (banner) {
+            const rect = banner.getBoundingClientRect();
+            const canvas = root.ownerDocument.createElement('canvas');
+            canvas.width = Math.ceil(rect.width * 2);
+            canvas.height = Math.ceil(rect.height * 2);
+            const ctx = canvas.getContext('2d')!;
+            ctx.scale(2, 2);
+            for (const img of Array.from(banner.querySelectorAll('img'))) {
+              await img.decode();
+              const bounds = img.getBoundingClientRect();
+              ctx.drawImage(img, bounds.left - rect.left, bounds.top - rect.top, bounds.width, bounds.height);
+            }
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'top';
+            for (const heading of Array.from(banner.querySelectorAll('h1, h2'))) {
+              const style = view.getComputedStyle(heading);
+              ctx.font = `${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+              ctx.fillStyle = style.color;
+              ctx.fillText(heading.textContent || '', rect.width / 2, heading.getBoundingClientRect().top - rect.top);
+            }
+            sheet.getCell(nextRow, first).value = '';
+            sheet.getRow(nextRow).height = rect.height * 0.75;
+            const imageId = book.addImage({ base64: canvas.toDataURL('image/png'), extension: 'png' });
+            sheet.addImage(imageId, { tl: { col: first - 1, row: nextRow - 1 }, ext: { width: rect.width, height: rect.height }, editAs: 'oneCell' });
+          } else if (root.classList.contains('field-service-print')) {
+            sheet.getRow(nextRow).height = tr.getBoundingClientRect().height * 0.75;
+          }
           // Preserve spanning cells without assigning duplicate values to merged children.
           if (td.rowSpan > 1) {
             if (last > first) sheet.unMergeCells(nextRow, first, nextRow, last);
             sheet.mergeCells(nextRow, first, nextRow + td.rowSpan - 1, last);
           }
           for (let r = nextRow; r < nextRow + td.rowSpan; r++) for (let c = first; c <= last; c++) occupied.add(`${r}:${c}`);
-          for (const img of Array.from(td.querySelectorAll('img'))) {
+          for (const img of Array.from(td.querySelectorAll('img')).filter(img => !img.closest('.field-service-banner'))) {
             const imageRow = nextRow;
             await image(img, imageRow, first - 1, 70, 48);
             // Leave room for the heading above its illustration.

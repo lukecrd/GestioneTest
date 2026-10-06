@@ -1,0 +1,91 @@
+.field-service-print {
+  width: 175.42mm;
+  max-width: 100%;
+  margin: 0 auto;
+  background: #fff;
+  color: #000;
+  font-family: Calibri, Arial, sans-serif;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+.field-service-banner {
+  position: relative;
+  height: 43.9mm;
+  overflow: hidden;
+}
+.field-service-banner__background {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: fill;
+}
+.field-service-banner h1, .field-service-banner h2 {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  z-index: 1;
+  margin: 0;
+  color: #000;
+  font-family: Cambria, 'Times New Roman', serif;
+  font-size: 14.25pt;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+}
+.field-service-banner h1 { top: 5.6mm; }
+.field-service-banner h2 { top: 21mm; }
+.field-service-banner__people {
+  position: absolute;
+  right: 1mm;
+  bottom: 0.53mm;
+  width: 47.9mm;
+  height: 31.2mm;
+  object-fit: fill;
+  z-index: 2;
+}
+.field-service-print .field-service-table {
+  width: 100% !important;
+  min-width: 0 !important;
+  table-layout: fixed !important;
+  border-collapse: collapse;
+  margin: 0;
+  font-size: 9.75pt !important;
+}
+.field-service-print .field-service-table th,
+.field-service-print .field-service-table td {
+  border: 0.5pt solid #000 !important;
+  padding: 0 1mm !important;
+  vertical-align: middle;
+  text-align: center;
+  white-space: normal !important;
+  overflow-wrap: anywhere;
+  font-size: 9.75pt !important;
+  line-height: 12pt;
+  color: #000 !important;
+}
+.field-service-table thead tr { height: 6.35mm; background: #d9d9d9; font-weight: 700; }
+.field-service-table thead { display: table-header-group; }
+.field-service-print .field-service-banner-row td { padding: 0 !important; }
+.field-service-table .field-service-topic { height: 6.35mm; }
+.field-service-print .field-service-topic td { color: #00f !important; font-weight: 700; font-size: 10.72pt !important; }
+.field-service-table .field-service-week { height: 6.35mm; background: #d9d9d9; }
+.field-service-print .field-service-week td { color: #f00 !important; font-weight: 700; font-size: 14.62pt !important; }
+.field-service-table .field-service-meeting { height: 10.32mm; }
+.field-service-print .field-service-meeting td:first-child { text-align: left; }
+.field-service-description { font-weight: 700; }
+.field-service-print .field-service-special { color: #f00 !important; font-weight: 700; }
+.field-service-table tr { break-inside: avoid; }
+@media print {
+  @page { size: A4 portrait; margin: 3mm 6mm 6mm; }
+  body:has(.field-service-print) { margin: 0 !important; padding: 0 !important; }
+  body:has(.field-service-print) .app-sidebar,
+  body:has(.field-service-print) .app-topbar { display: none !important; }
+  body:has(.field-service-print) .app-shell,
+  body:has(.field-service-print) .app-main,
+  body:has(.field-service-print) .app-content { display: block !important; width: 100% !important; max-width: none !important; margin: 0 !important; padding: 0 !important; min-height: 0 !important; }
+  body:has(.field-service-print) .app-content [class*="space-y-"] { margin: 0 !important; padding: 0 !important; }
+  .field-service-print { width: 175.42mm !important; max-width: 100% !important; margin: 2mm 0 0 2.8mm !important; padding: 0 !important; }
+  .field-service-banner { break-inside: avoid; }
+}
+
