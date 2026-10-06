@@ -1,7 +1,7 @@
 /* Shared paper layout; outside component layers so print rules override utilities. */
 @page {
   size: A4 portrait;
-  margin: 6mm;
+  margin: 3mm 6mm 6mm;
 }
 
 @media print {
