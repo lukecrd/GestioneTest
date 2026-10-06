@@ -32,7 +32,7 @@ export function getS89FileName(studentName: string, partNumber?: string | number
  */
 export function renderS89Page(doc: jsPDF, item: S89Item): void {
   const pageWidth = doc.internal.pageSize.getWidth();
-  const margin = 12;
+  const margin = 6;
   const rightEdge = pageWidth - margin;
 
   // Intestazione
