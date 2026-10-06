@@ -36,7 +36,7 @@ export async function buildProgramSheet(book: Workbook, root: HTMLElement) {
     let column = 1;
     const widthRow = Array.from(table.rows).find(row => row.cells.length === columns) || table.rows[0];
     if (total > 0) for (const cell of Array.from(widthRow.cells)) {
-      const width = root.classList.contains('field-service-print')
+      const width = (root.classList.contains('field-service-print') || root.classList.contains('vm-program'))
         ? (cell.getBoundingClientRect().width / cell.colSpan - 5) / 7
         : 100 * cell.getBoundingClientRect().width / total / cell.colSpan;
       for (let n = 0; n < cell.colSpan; n++) sheet.getColumn(column++).width = width;
@@ -50,7 +50,7 @@ export async function buildProgramSheet(book: Workbook, root: HTMLElement) {
     if (last > first) sheet.mergeCells(row, first, row, last);
     const cell = sheet.getCell(row, first);
     const style = view.getComputedStyle(element);
-    const fontSize = Math.max(9, Math.min(22, parseFloat(style.fontSize) * 0.75 || 10));
+    const fontSize = Math.max(root.classList.contains('vm-program') ? 6 : 9, Math.min(22, parseFloat(style.fontSize) * 0.75 || 10));
     cell.value = text;
     cell.font = { name: /Calibri/.test(style.fontFamily) ? 'Calibri' : /Georgia|Times/.test(style.fontFamily) ? 'Georgia' : 'Arial', size: fontSize, bold: Number(style.fontWeight) >= 600 || style.fontWeight === 'bold', italic: style.fontStyle === 'italic', color: { argb: color(style.color, 'FF000000') } };
     cell.alignment = { wrapText: true, vertical: 'middle', horizontal: style.textAlign === 'right' ? 'right' : style.textAlign === 'center' ? 'center' : 'left' };
@@ -90,6 +90,7 @@ export async function buildProgramSheet(book: Workbook, root: HTMLElement) {
     }
     if (element.tagName === 'TABLE') {
       const start = nextRow;
+      if (root.classList.contains('vm-program') && start > 1) sheet.getRow(start - 1).addPageBreak();
       const occupied = new Set<string>();
       for (const tr of Array.from((element as HTMLTableElement).rows)) {
         let col = 1;
@@ -97,7 +98,16 @@ export async function buildProgramSheet(book: Workbook, root: HTMLElement) {
           while (occupied.has(`${nextRow}:${col}`)) col++;
           const first = col;
           const last = col + td.colSpan - 1;
-          cellBlock(td, nextRow, first, last, true);
+          cellBlock(td, nextRow, first, last, !root.classList.contains('vm-program'));
+          if (root.classList.contains('vm-program')) {
+            const style = view.getComputedStyle(td);
+            const edges = {} as NonNullable<import('exceljs').Cell['border']>;
+            for (const side of ['top', 'bottom', 'left', 'right'] as const) {
+              const width = parseFloat(style.getPropertyValue('border-' + side + '-width'));
+              if (width > 0) edges[side] = { style: 'thin', color: { argb: color(style.getPropertyValue('border-' + side + '-color'), 'FF222222') } };
+            }
+            sheet.getCell(nextRow, first).border = edges;
+          }
           const banner = td.querySelector<HTMLElement>('.field-service-banner');
           if (banner) {
             const rect = banner.getBoundingClientRect();
@@ -123,7 +133,7 @@ export async function buildProgramSheet(book: Workbook, root: HTMLElement) {
             sheet.getRow(nextRow).height = rect.height * 0.75;
             const imageId = book.addImage({ base64: canvas.toDataURL('image/png'), extension: 'png' });
             sheet.addImage(imageId, { tl: { col: first - 1, row: nextRow - 1 }, ext: { width: rect.width, height: rect.height }, editAs: 'oneCell' });
-          } else if (root.classList.contains('field-service-print')) {
+          } else if (root.classList.contains('field-service-print') || root.classList.contains('vm-program')) {
             sheet.getRow(nextRow).height = tr.getBoundingClientRect().height * 0.75;
           }
           // Preserve spanning cells without assigning duplicate values to merged children.
@@ -145,7 +155,7 @@ export async function buildProgramSheet(book: Workbook, root: HTMLElement) {
         nextRow++;
       }
       const headRows = (element as HTMLTableElement).tHead?.rows.length || 0;
-      if (headRows) sheet.pageSetup.printTitlesRow = `${start}:${start + headRows - 1}`;
+      if (headRows && !root.classList.contains('vm-program')) sheet.pageSetup.printTitlesRow = `${start}:${start + headRows - 1}`;
       return;
     }
     const children = Array.from(element.children).filter(child => !child.matches('.no-print, button, select, input, textarea, svg'));
