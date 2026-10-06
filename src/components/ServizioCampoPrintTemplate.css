@@ -68,7 +68,7 @@
 .field-service-table thead { display: table-header-group; }
 .field-service-print .field-service-banner-row td { padding: 0 !important; }
 .field-service-table .field-service-topic { height: 6.35mm; }
-.field-service-print .field-service-topic td { color: #00f !important; font-weight: 700; font-size: 10.72pt !important; }
+.field-service-print .field-service-topic td { color: #00f !important; font-weight: 700; font-size: 11.7pt !important; }
 .field-service-table .field-service-week { height: 6.35mm; background: #d9d9d9; }
 .field-service-print .field-service-week td { color: #f00 !important; font-weight: 700; font-size: 14.62pt !important; }
 .field-service-table .field-service-meeting { height: 10.32mm; }
@@ -88,4 +88,5 @@
   .field-service-print { width: 175.42mm !important; max-width: 100% !important; margin: 2mm 0 0 2.8mm !important; padding: 0 !important; }
   .field-service-banner { break-inside: avoid; }
 }
+
 
