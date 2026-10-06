@@ -1,3 +1,4 @@
+import { exportProgramExcel } from '../utils/programExcel';
 import React, { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import {
@@ -999,7 +1000,11 @@ export function ServizioCampoView({
   };
 
   // --- EXPORT EXCEL ---
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
+try {
+setActiveSubTab('stampa');
+await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
     const headers = [
       'Data',
       'Giorno',
@@ -1038,9 +1043,11 @@ export function ServizioCampoView({
 
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Servizio di Campo');
-    XLSX.writeFile(wb, `Adunanze_Servizio_Campo_${MESI[selectedMonth]}_${selectedYear}.xlsx`);
+    await exportProgramExcel(wb, `Adunanze_Servizio_Campo_${MESI[selectedMonth]}_${selectedYear}.xlsx`, '.excel-service');
     onShowToast('Programma esportato in Excel (.xlsx)!');
-  };
+
+} catch (error) { onShowToast(error instanceof Error ? error.message : 'Errore durante l’esportazione Excel.'); }
+};
 
   // Filter schedule rows
   const filteredSchedule = useMemo(() => {
@@ -2440,7 +2447,7 @@ export function ServizioCampoView({
           </div>
 
           {/* Printable Layout Sheet */}
-          <div className="bg-white text-slate-900 p-8 rounded-2xl border border-slate-300 shadow-lg max-w-4xl mx-auto print:m-0 print:p-0 print:border-none print:shadow-none">
+          <div className="excel-service bg-white text-slate-900 p-8 rounded-2xl border border-slate-300 shadow-lg max-w-4xl mx-auto print:m-0 print:p-0 print:border-none print:shadow-none">
             {/* Congregation Header */}
             <div className="text-center pb-4 border-b-2 border-slate-800 mb-6">
               <h1 className="text-2xl font-black tracking-wide uppercase text-slate-900">

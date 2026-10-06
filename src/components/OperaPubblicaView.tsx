@@ -1,3 +1,4 @@
+import { exportProgramExcel } from '../utils/programExcel';
 import React, { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
 import {
@@ -900,7 +901,8 @@ export const OperaPubblicaView: React.FC<OperaPubblicaViewProps> = ({
     onShowToast('Programma copiato negli appunti! Pronto per inviare su WhatsApp.');
   };
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
+try {
     const rows: (string | number)[][] = [
       ['PROGRAMMA OPERA CON ESPOSITORI MOBILI', '', '', ''],
       [`MESE DI ${MESI[selectedMonth].toUpperCase()}`, '', '', ''],
@@ -993,9 +995,11 @@ export const OperaPubblicaView: React.FC<OperaPubblicaViewProps> = ({
     ];
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Opera Espositori');
-    XLSX.writeFile(workbook, `Programma_Opera_Espositori_${MESI[selectedMonth]}_${selectedYear}.xlsx`);
+    await exportProgramExcel(workbook, `Programma_Opera_Espositori_${MESI[selectedMonth]}_${selectedYear}.xlsx`, '.printable-area');
     onShowToast(`Programma esportato in formato Excel (.xlsx)!`);
-  };
+
+} catch (error) { onShowToast(error instanceof Error ? error.message : 'Errore durante l’esportazione Excel.'); }
+};
 
   // --- STATISTICHE E RIEPILOGO UTILIZZO PER PERSONA ---
   const participantUsageStats = useMemo(() => {

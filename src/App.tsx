@@ -1,3 +1,4 @@
+import { exportProgramExcel } from './utils/programExcel';
 import React, { useState, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx';
 import {
@@ -172,7 +173,7 @@ function downloadCsv(filename: string, header: string[], rows: (string | undefin
 export default function App() {
   const [state, setState] = useState<StateData>(loadInitialState);
   const [activeTab, setActiveTab] = useState<SectionKey | 'hub'>('hub');
-  
+
   // User Authentication State
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
     try {
@@ -206,7 +207,7 @@ export default function App() {
   // Sync Status
   const [syncMsg, setSyncMsg] = useState<string>('Connessione…');
   const [syncClass, setSyncClass] = useState<string>('text-gray-400');
-  
+
   // Toast
   const [toastMsg, setToastMsg] = useState<string | null>(null);
   const toastTimer = useRef<any>(null);
@@ -664,7 +665,7 @@ export default function App() {
       // Audio/Video: prefer people not already assigned to Uscieri or Microfonisti
       const assignedInWeekIds = [...usedInWeek, ...chosenMic.map(c => c.id)];
       let c1: Person | null = null, c2: Person | null = null;
-      
+
       const orderedPrimary = consolePool.filter(p => !assignedInWeekIds.includes(p.id)).sort((a, b) => {
         const ca = cc[a.id] || 0, cb = cc[b.id] || 0;
         if (ca !== cb) return ca - cb;
@@ -890,7 +891,8 @@ export default function App() {
     showToast(`Programma di ${MESI[menMonth]} ${menYear} archiviato`);
   };
 
-  const exportMensileToExcel = () => {
+  const exportMensileToExcel = async () => {
+try {
     if (!menRows) return;
     const rows: (string | number)[][] = [
       ['Programma Incontro Vita e Ministero / Servizi Infrasettimanali', '', '', '', '', '', ''],
@@ -934,11 +936,14 @@ export default function App() {
     ];
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Programma Infrasettimanale');
-    XLSX.writeFile(workbook, `Programma_Infrasettimanale_${menTitle.replace(/\s+/g, '_')}.xlsx`);
+    await exportProgramExcel(workbook, `Programma_Infrasettimanale_${menTitle.replace(/\s+/g, '_')}.xlsx`, '.print-sheet');
     showToast('Programma Infrasettimanale esportato in Excel (.xlsx)!');
-  };
 
-  const exportDomenicaToExcel = () => {
+} catch (error) { showToast(error instanceof Error ? error.message : 'Errore durante l’esportazione Excel.'); }
+};
+
+  const exportDomenicaToExcel = async () => {
+try {
     if (!domenicaProgramRows) return;
     const rows: (string | number)[][] = [
       ['Programma Adunanza del Fine Settimana', '', '', '', '', ''],
@@ -977,9 +982,11 @@ export default function App() {
     ];
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Adunanza Domenica');
-    XLSX.writeFile(workbook, `Programma_Domenica_${domTitle.replace(/\s+/g, '_')}.xlsx`);
+    await exportProgramExcel(workbook, `Programma_Domenica_${domTitle.replace(/\s+/g, '_')}.xlsx`, '.weekend-program');
     showToast('Programma Domenica esportato in Excel (.xlsx)!');
-  };
+
+} catch (error) { showToast(error instanceof Error ? error.message : 'Errore durante l’esportazione Excel.'); }
+};
 
   const loadMensileArchive = (archive: ArchivedProgram) => {
     const rows: MensileRow[] = archive.rows.map(r => ({

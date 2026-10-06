@@ -1,3 +1,4 @@
+import { exportProgramExcel } from '../utils/programExcel';
 import React, { useState, useMemo } from 'react';
 import { VitaEMinisteroData, VitaEMinisteroMeeting, VitaEMinisteroParticipant } from '../types';
 import { Printer, Download, Sparkles, Filter, FileText } from 'lucide-react';
@@ -103,7 +104,8 @@ export function VitaEMinisteroPrintView({
     downloadCombinedS89Pdf(items, filename);
   };
 
-  const handleExportExcel = () => {
+  const handleExportExcel = async () => {
+try {
     const rows: any[] = [];
     const cong = data.congregationName || 'Congregazione';
 
@@ -169,8 +171,10 @@ export function VitaEMinisteroPrintView({
     const worksheet = XLSX.utils.aoa_to_sheet(rows);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Vita e Ministero');
-    XLSX.writeFile(workbook, `Programma_Vita_e_Ministero_${cong}.xlsx`);
-  };
+    await exportProgramExcel(workbook, `Programma_Vita_e_Ministero_${cong}.xlsx`, '.excel-ministry');
+
+} catch (error) { alert(error instanceof Error ? error.message : 'Errore durante l’esportazione Excel.'); }
+};
 
   const currentDateTimestamp = new Intl.DateTimeFormat('it-IT', {
     day: '2-digit',
@@ -242,7 +246,7 @@ export function VitaEMinisteroPrintView({
       </div>
 
       {/* The Printable Page Sheet */}
-      <div className="bg-white text-black p-6 sm:p-10 rounded-2xl shadow-lg border border-slate-200 max-w-4xl mx-auto print:shadow-none print:border-none print:p-0 print:m-0 print:max-w-none">
+      <div className="excel-ministry bg-white text-black p-6 sm:p-10 rounded-2xl shadow-lg border border-slate-200 max-w-4xl mx-auto print:shadow-none print:border-none print:p-0 print:m-0 print:max-w-none">
         {/* Page Top Header */}
         <div className="flex justify-between items-baseline border-b-2 border-slate-900 pb-2 mb-3">
           <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-950 tracking-tight">
