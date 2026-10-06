@@ -1,10 +1,7 @@
-export type UserRole = 'admin' | 'viewer';
+import type { AccessProfile } from './accessPolicy';
+export type UserRole = 'admin' | 'editor' | 'viewer';
 
-export interface AuthUser {
-  uid: string;
-  email?: string | null;
-  displayName?: string | null;
-  role: UserRole;
+export interface AuthUser extends AccessProfile {
   isAnonymousPIN?: boolean;
 }
 

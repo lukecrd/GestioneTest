@@ -1,3 +1,5 @@
+import { config as loadEnv } from 'dotenv';
+loadEnv({ path: '.env.local' });
 import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
@@ -7,7 +9,7 @@ async function startServer() {
   const app = express();
   const PORT = 3000;
 
-  app.use(express.json());
+  app.use(express.json({ limit: '2mb' }));
 
   // ================= API ROUTES FIRST =================
   app.use('/api', apiRouter);

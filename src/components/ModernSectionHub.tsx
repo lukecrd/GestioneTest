@@ -31,7 +31,8 @@ export type SectionKey =
   | 'servizioCampo'
   | 'operaPubblica'
   | 'impostazioni'
-  | 'statistiche';
+  | 'statistiche'
+  | 'accessi';
 
 interface ModernSectionHubProps {
   state: StateData;
@@ -43,6 +44,7 @@ interface ModernSectionHubProps {
   domYear: number;
   onSelectSection: (section: SectionKey) => void;
   currentUserRole?: 'admin' | 'viewer';
+  allowedSections?: string[];
   onUpdateResponsible: (key: ChecklistProgramKey, responsible: { name: string; email: string } | null) => void;
 }
 
@@ -70,6 +72,7 @@ export const ModernSectionHub: React.FC<ModernSectionHubProps> = ({
   domYear,
   onSelectSection,
   currentUserRole,
+  allowedSections,
   onUpdateResponsible,
 }) => {
   const isAdmin = currentUserRole === 'admin';
@@ -95,7 +98,7 @@ export const ModernSectionHub: React.FC<ModernSectionHubProps> = ({
 
   const operaPronto = (state.operaPubblica?.schedule || []).some(s => fallsInMonth(s.dateStr, curMonth, curYear));
 
-  const checklist: { key: ChecklistProgramKey; label: string; ready: boolean; section: SectionKey }[] = [
+  const allChecklist: { key: ChecklistProgramKey; label: string; ready: boolean; section: SectionKey }[] = [
     { key: 'mensile', label: 'Programma mensile', ready: mensilePronto, section: 'mensile' },
     { key: 'domenica', label: 'Adunanza domenica', ready: domenicaPronto, section: 'domenica' },
     { key: 'vitaEMinistero', label: 'Vita e ministero', ready: vitaPronto, section: 'vitaEMinistero' },
@@ -103,6 +106,7 @@ export const ModernSectionHub: React.FC<ModernSectionHubProps> = ({
     { key: 'operaPubblica', label: 'Opera pubblica', ready: operaPronto, section: 'operaPubblica' },
   ];
 
+  const checklist = allChecklist.filter(c => !allowedSections || allowedSections.includes(c.section));
   const readyCount = checklist.filter(c => c.ready).length;
 
   const [editingKey, setEditingKey] = useState<ChecklistProgramKey | null>(null);
@@ -155,7 +159,7 @@ export const ModernSectionHub: React.FC<ModernSectionHubProps> = ({
           <p className="page-description">Situazione operativa della congregazione e accesso rapido alle attività principali.</p>
         </div>
         <div className="flex flex-wrap gap-2 no-print">
-          <button className="btn-ghost" onClick={() => onSelectSection('impostazioni')}>
+          <button disabled={!!allowedSections && !allowedSections.includes('impostazioni')} className="btn-ghost" onClick={() => onSelectSection('impostazioni')}>
             <CalendarClock className="w-4 h-4" /> Assenze e calendario
           </button>
           {currentUserRole === 'admin' && (
@@ -167,22 +171,22 @@ export const ModernSectionHub: React.FC<ModernSectionHubProps> = ({
       </div>
 
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-        <button className="metric-card text-left" onClick={() => onSelectSection('anagrafica')}>
+        <button disabled={!!allowedSections && !allowedSections.includes('anagrafica')} className="metric-card text-left" onClick={() => onSelectSection('anagrafica')}>
           <div className="metric-icon"><Users className="w-5 h-5" /></div>
           <div className="metric-value">{people}</div>
           <div className="metric-label">Persone in anagrafica</div>
         </button>
-        <button className="metric-card text-left" onClick={() => onSelectSection('mensile')}>
+        <button disabled={!!allowedSections && !allowedSections.includes('mensile')} className="metric-card text-left" onClick={() => onSelectSection('mensile')}>
           <div className="metric-icon"><CheckCircle2 className="w-5 h-5" /></div>
           <div className="metric-value">{activePrograms}</div>
           <div className="metric-label">Righe programmi attivi</div>
         </button>
-        <button className="metric-card text-left" onClick={() => onSelectSection('impostazioni')}>
+        <button disabled={!!allowedSections && !allowedSections.includes('impostazioni')} className="metric-card text-left" onClick={() => onSelectSection('impostazioni')}>
           <div className="metric-icon"><Clock className="w-5 h-5" /></div>
           <div className="metric-value">{unavailabilityCount}</div>
           <div className="metric-label">Indisponibilità registrate</div>
         </button>
-        <button className="metric-card text-left" onClick={() => onSelectSection('impostazioni')}>
+        <button disabled={!!allowedSections && !allowedSections.includes('impostazioni')} className="metric-card text-left" onClick={() => onSelectSection('impostazioni')}>
           <div className="metric-icon"><CalendarClock className="w-5 h-5" /></div>
           <div className="metric-value">{specialCount}</div>
           <div className="metric-label">Date speciali</div>
@@ -200,6 +204,7 @@ export const ModernSectionHub: React.FC<ModernSectionHubProps> = ({
           </div>
           <button
             className="btn-ghost shrink-0"
+            disabled={!!allowedSections && !allowedSections.includes(people === 0 ? 'anagrafica' : 'mensile')}
             onClick={() => onSelectSection(people === 0 ? 'anagrafica' : 'mensile')}
           >
             Apri <ArrowRight className="w-4 h-4" />
@@ -319,7 +324,7 @@ export const ModernSectionHub: React.FC<ModernSectionHubProps> = ({
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-          {modules.map((module) => {
+          {modules.filter(module => !allowedSections || allowedSections.includes(module.id)).map((module) => {
             const Icon = module.icon;
             return (
               <button key={module.id} onClick={() => onSelectSection(module.id)} className="module-card group">
