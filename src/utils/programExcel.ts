@@ -90,7 +90,7 @@ export async function buildProgramSheet(book: Workbook, root: HTMLElement) {
     }
     if (element.tagName === 'TABLE') {
       const start = nextRow;
-      if (root.classList.contains('vm-program') && start > 1) sheet.getRow(start).addPageBreak();
+      if (root.classList.contains('vm-program') && start > 1) sheet.getRow(start - 1).addPageBreak();
       const occupied = new Set<string>();
       for (const tr of Array.from((element as HTMLTableElement).rows)) {
         let col = 1;
