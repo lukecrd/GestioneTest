@@ -176,14 +176,6 @@ try {
 } catch (error) { alert(error instanceof Error ? error.message : 'Errore durante l’esportazione Excel.'); }
 };
 
-  const currentDateTimestamp = new Intl.DateTimeFormat('it-IT', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  }).format(new Date());
 
   return (
     <div className="space-y-6">
@@ -255,11 +247,6 @@ try {
           <h2 className="text-lg sm:text-xl font-bold text-slate-900">
             Adunanza infrasettimanale
           </h2>
-        </div>
-
-        {/* Timestamp */}
-        <div className="text-right text-[11px] text-slate-500 mb-6 print:text-[10px]">
-          {currentDateTimestamp}
         </div>
 
         {/* Meeting List */}
