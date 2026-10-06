@@ -1,3 +1,4 @@
+import { ServizioCampoPrintTemplate, DEFAULT_FIELD_TOPIC } from './ServizioCampoPrintTemplate';
 import { exportProgramExcel } from '../utils/programExcel';
 import React, { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
@@ -275,13 +276,14 @@ export function ServizioCampoView({
 
   // Extract or initialize data
   const data: ServizioCampoData = useMemo(() => {
-    const raw = state.servizioCampo || {
+    const raw: ServizioCampoData = state.servizioCampo || {
       conductors: [],
       schedule: [],
       locations: DEFAULT_LOCATIONS,
       defaultSettings: DEFAULT_SLOT_SETTINGS
     };
     return {
+      printTopic: raw.printTopic ?? DEFAULT_FIELD_TOPIC,
       conductors: Array.isArray(raw.conductors) ? raw.conductors : [],
       schedule: Array.isArray(raw.schedule) ? raw.schedule : [],
       locations: Array.isArray(raw.locations) && raw.locations.length > 0 ? raw.locations : DEFAULT_LOCATIONS,
@@ -1077,7 +1079,7 @@ await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(r
   return (
     <div className="space-y-6">
       {/* Header Banner */}
-      <div className="bg-gradient-to-r from-sky-900 via-indigo-900 to-slate-900 text-white p-5 rounded-2xl shadow-md">
+      <div className="no-print bg-gradient-to-r from-sky-900 via-indigo-900 to-slate-900 text-white p-5 rounded-2xl shadow-md">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="p-3 bg-sky-500/20 rounded-xl border border-sky-400/30 text-sky-300">
@@ -2447,86 +2449,8 @@ await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(r
           </div>
 
           {/* Printable Layout Sheet */}
-          <div className="excel-service bg-white text-slate-900 p-8 rounded-2xl border border-slate-300 shadow-lg max-w-4xl mx-auto print:m-0 print:p-0 print:border-none print:shadow-none">
-            {/* Congregation Header */}
-            <div className="text-center pb-4 border-b-2 border-slate-800 mb-6">
-              <h1 className="text-2xl font-black tracking-wide uppercase text-slate-900">
-                Adunanze per il Servizio di Campo
-              </h1>
-              <p className="text-lg font-bold text-slate-700 mt-1">
-                Programma del Mese di {MESI[selectedMonth]} {selectedYear}
-              </p>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Martedì, Giovedì, Sabato, Domenica e Appuntamenti Festivi / Straordinari
-              </p>
-            </div>
-
-            {/* Printable Table */}
-            <table className="w-full border-collapse text-xs border border-slate-300">
-              <thead>
-                <tr className="bg-slate-200 text-slate-900 font-bold border-b border-slate-400">
-                  <th className="p-2.5 border border-slate-300 text-left w-32">Data e Giorno</th>
-                  <th className="p-2.5 border border-slate-300 text-left w-36">Tipologia / Evento</th>
-                  <th className="p-2.5 border border-slate-300 text-center w-20">Orario</th>
-                  <th className="p-2.5 border border-slate-300 text-left">Luogo di Ritrovo</th>
-                  <th className="p-2.5 border border-slate-300 text-left">Conduttore</th>
-                  <th className="p-2.5 border border-slate-300 text-left">Note / Specifiche</th>
-                </tr>
-              </thead>
-              <tbody>
-                {currentMonthSchedule.map(m => {
-                  const conductor = getConductorById(m.conductorId);
-                  const slot = SLOT_INFO[m.slotKey] || SLOT_INFO.speciale;
-                  const typeInfo = MEETING_TYPE_INFO[m.meetingType || 'standard'];
-
-                  if (m.isActive === false) {
-                    return (
-                      <tr key={m.id || m.dateStr + m.slotKey} className="bg-slate-100 text-slate-500">
-                        <td className="p-2 border border-slate-300 font-bold">{formatShortDate(m.dateStr)}</td>
-                        <td className="p-2 border border-slate-300">{slot.label}</td>
-                        <td className="p-2 border border-slate-300 text-center">—</td>
-                        <td className="p-2 border border-slate-300 col-span-3 italic">
-                          Adunanza Sospesa {m.specialNote ? `(${m.specialNote})` : ''}
-                        </td>
-                        <td className="p-2 border border-slate-300">—</td>
-                        <td className="p-2 border border-slate-300">—</td>
-                      </tr>
-                    );
-                  }
-
-                  return (
-                    <tr key={m.id || m.dateStr + m.slotKey} className="border-b border-slate-200 hover:bg-slate-50">
-                      <td className="p-2.5 border border-slate-300 font-bold text-slate-900">
-                        {formatShortDate(m.dateStr)}
-                      </td>
-                      <td className="p-2.5 border border-slate-300 font-semibold">
-                        {m.meetingType && m.meetingType !== 'standard' ? (
-                          <span className="font-bold text-indigo-900">
-                            {typeInfo.label}
-                          </span>
-                        ) : (
-                          slot.label
-                        )}
-                      </td>
-                      <td className="p-2.5 border border-slate-300 text-center font-mono font-bold">{m.time}</td>
-                      <td className="p-2.5 border border-slate-300">{m.location}</td>
-                      <td className="p-2.5 border border-slate-300 font-bold text-slate-900">
-                        {conductor ? conductor.name : '—'}
-                      </td>
-                      <td className="p-2.5 border border-slate-300 text-slate-600">
-                        {m.specialNote || '—'}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-
-            {/* Footer Note */}
-            <div className="mt-6 pt-4 border-t border-slate-300 flex justify-between text-[11px] text-slate-500">
-              <span>Si prega i conduttori di arrivare con qualche minuto di anticipo sul luogo stabilito.</span>
-            </div>
-          </div>
+          <div className="no-print mb-4"><label className="text-sm font-semibold">Cosa trattare?<input className="input w-full mt-1" value={data.printTopic || ''} onChange={e => saveServizioData({ ...data, printTopic: e.target.value })} /></label></div>
+          <ServizioCampoPrintTemplate meetings={currentMonthSchedule.map(m => ({ ...m, conductorName: getConductorById(m.conductorId)?.name || '—' }))} year={selectedYear} month={selectedMonth} topic={data.printTopic || DEFAULT_FIELD_TOPIC} defaults={defaultSettings} />
         </div>
       )}
 

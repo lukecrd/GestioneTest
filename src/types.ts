@@ -165,6 +165,7 @@ export interface ServizioCampoDefaultSlotConfig {
 }
 
 export interface ServizioCampoData {
+  printTopic?: string;
   conductors: ServizioCampoConductor[];
   schedule: ServizioCampoMeetingAssignment[];
   locations: string[];
