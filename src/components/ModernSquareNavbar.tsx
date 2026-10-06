@@ -8,6 +8,7 @@ import {
   Menu,
   X,
   ChevronRight,
+  ShieldCheck,
 } from 'lucide-react';
 import {
   SpeakerPodiumIcon,
@@ -21,6 +22,7 @@ interface ModernSquareNavbarProps {
   activeTab: SectionKey | 'hub';
   onSelectTab: (tab: SectionKey | 'hub') => void;
   peopleCount: number;
+  allowedTabs?: string[];
 }
 
 type NavItem = {
@@ -42,6 +44,7 @@ export const ModernSquareNavbar: React.FC<ModernSquareNavbarProps> = ({
   activeTab,
   onSelectTab,
   peopleCount,
+  allowedTabs,
 }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -55,6 +58,7 @@ export const ModernSquareNavbar: React.FC<ModernSquareNavbarProps> = ({
     { id: 'operaPubblica', label: 'Opera pubblica', icon: WomenWithLiteratureCartIcon, group: 'servizio' },
     { id: 'impostazioni', label: 'Assenze e calendario', icon: Clock, group: 'gestione' },
     { id: 'statistiche', label: 'Statistiche', icon: BarChart2, group: 'gestione' },
+    { id: 'accessi', label: 'Gestione accessi', icon: ShieldCheck, group: 'gestione' },
   ];
 
   const select = (id: NavItem['id']) => {
@@ -67,7 +71,7 @@ export const ModernSquareNavbar: React.FC<ModernSquareNavbarProps> = ({
       {(['main', 'programmi', 'servizio', 'gestione'] as const).map((group) => (
         <div key={group} className="app-nav-group">
           {groupLabels[group] && <div className="app-nav-group-label">{groupLabels[group]}</div>}
-          {navItems.filter((item) => item.group === group).map((item) => {
+          {navItems.filter((item) => item.group === group && (!allowedTabs || allowedTabs.includes(item.id))).map((item) => {
             const Icon = item.icon;
             const isActive = activeTab === item.id;
             return (

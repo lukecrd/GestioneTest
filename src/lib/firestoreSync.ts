@@ -1,8 +1,9 @@
-import { doc, onSnapshot, setDoc } from 'firebase/firestore';
-import { db } from '../firebase';
+import { accessRequest } from './accessClient';
+import type { AccessProfile } from '../accessPolicy';
+
 import { StateData, MensileRow, DomenicaRow } from '../types';
 
-const DOC_REF = doc(db, 'congregationData', 'main');
+
 
 // Helper to serialize Date objects in row arrays
 function serializeMensileRows(rows: MensileRow[] | null) {
@@ -53,74 +54,26 @@ export interface ActiveProgramsData {
   domYear: number;
 }
 
-export function subscribeToCongregation(
-  onUpdate: (data: { state?: StateData; activePrograms?: ActiveProgramsData }) => void,
-  onError: (err: any) => void
-) {
-  return onSnapshot(
-    DOC_REF,
-    (snapshot) => {
-      if (snapshot.exists()) {
-        const raw = snapshot.data();
-        const result: { state?: StateData; activePrograms?: ActiveProgramsData } = {};
 
-        if (raw.state) {
-          result.state = raw.state as StateData;
-        }
-
-        if (raw.activePrograms) {
-          const ap = raw.activePrograms;
-          result.activePrograms = {
-            menRows: deserializeMensileRows(ap.menRows),
-            menTitle: ap.menTitle || '',
-            menWarn: ap.menWarn || null,
-            menMonth: typeof ap.menMonth === 'number' ? ap.menMonth : new Date().getMonth(),
-            menYear: typeof ap.menYear === 'number' ? ap.menYear : new Date().getFullYear(),
-            domRows: deserializeDomenicaRows(ap.domRows),
-            domTitle: ap.domTitle || '',
-            domWarn: ap.domWarn || null,
-            domMonth: typeof ap.domMonth === 'number' ? ap.domMonth : new Date().getMonth(),
-            domYear: typeof ap.domYear === 'number' ? ap.domYear : new Date().getFullYear(),
-          };
-        }
-
-        onUpdate(result);
-      }
-    },
-    (error) => {
-      onError(error);
-    }
-  );
-}
-
-export async function pushStateToFirestore(state: StateData) {
-  const cleanState = JSON.parse(JSON.stringify(state));
-  await setDoc(
-    DOC_REF,
-    {
-      state: cleanState,
-      updatedAt: new Date().toISOString(),
-    },
-    { merge: true }
-  );
-}
-
-export async function pushActiveProgramsToFirestore(programs: ActiveProgramsData) {
-  const payload = {
-    activePrograms: {
-      menRows: serializeMensileRows(programs.menRows),
-      menTitle: programs.menTitle,
-      menWarn: programs.menWarn,
-      menMonth: programs.menMonth,
-      menYear: programs.menYear,
-      domRows: serializeDomenicaRows(programs.domRows),
-      domTitle: programs.domTitle,
-      domWarn: programs.domWarn,
-      domMonth: programs.domMonth,
-      domYear: programs.domYear,
-    },
-    updatedAt: new Date().toISOString(),
+export function subscribeToCongregation(onUpdate: (data: { state?: StateData; activePrograms?: Partial<ActiveProgramsData>; user?: AccessProfile }) => void, onError: (err: any) => void) {
+  let stopped = false; let timer: ReturnType<typeof setTimeout>;
+  const read = async () => {
+    try {
+      const raw = await accessRequest('/data');
+      if (stopped) return;
+      const ap = { ...raw.activePrograms };
+      if ('menRows' in ap) ap.menRows = deserializeMensileRows(ap.menRows);
+      if ('domRows' in ap) ap.domRows = deserializeDomenicaRows(ap.domRows);
+      onUpdate({ state: raw.state, activePrograms: ap, user: raw.user });
+    } catch (error) { if (!stopped) onError(error); }
+    if (!stopped) timer = setTimeout(read, 10000);
   };
-  const cleanPayload = JSON.parse(JSON.stringify(payload));
-  await setDoc(DOC_REF, cleanPayload, { merge: true });
+  void read(); return () => { stopped = true; clearTimeout(timer); };
+}
+export async function pushStateToFirestore(state: StateData, section: string) {
+  await accessRequest('/data', 'PATCH', { state: JSON.parse(JSON.stringify(state)), section });
+}
+export async function pushActiveProgramsToFirestore(programs: ActiveProgramsData, section: string) {
+  const activePrograms = { ...programs, menRows: serializeMensileRows(programs.menRows), domRows: serializeDomenicaRows(programs.domRows) };
+  await accessRequest('/data', 'PATCH', { activePrograms, section });
 }

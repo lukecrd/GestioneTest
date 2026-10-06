@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { accessRouter } from './accessRouter.js';
 import {
   getAvailableYears,
   fetchMonthMeetings,
@@ -6,6 +7,7 @@ import {
 } from './wolScraper.js';
 
 export const apiRouter = Router();
+apiRouter.use('/access', accessRouter);
 
 // Health check
 apiRouter.get('/health', (req, res) => {

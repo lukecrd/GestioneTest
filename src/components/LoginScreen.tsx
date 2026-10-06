@@ -1,154 +1,36 @@
 import React, { useState } from 'react';
-import { Lock, Key, LogIn, AlertCircle, UserPlus, ShieldCheck } from 'lucide-react';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInAnonymously } from 'firebase/auth';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword, signInWithCustomToken, sendEmailVerification, sendPasswordResetEmail, updateProfile } from 'firebase/auth';
 import { auth } from '../firebase';
-import { AuthUser } from '../types';
-
-interface LoginScreenProps {
-  onLoginSuccess: (user: AuthUser) => void;
-  adminPin: string;
-  viewerPin: string;
+import { accessRequest, getAccessProfile } from '../lib/accessClient';
+import type { AuthUser } from '../types';
+export function LoginScreen({ onLoginSuccess }: { onLoginSuccess: (user: AuthUser) => void }) {
+  const [register, setRegister] = useState(false), [identifier, setIdentifier] = useState(''), [password, setPassword] = useState(''), [name, setName] = useState('');
+  const [busy, setBusy] = useState(false), [error, setError] = useState(''), [message, setMessage] = useState('');
+  async function submit(e: React.FormEvent) {
+    e.preventDefault(); setBusy(true); setError(''); setMessage('');
+    try {
+      const value = identifier.trim();
+      if (register) { const credential = await createUserWithEmailAndPassword(auth, value, password); await updateProfile(credential.user, { displayName: name.trim() }); await sendEmailVerification(credential.user); }
+      else if (value.includes('@')) await signInWithEmailAndPassword(auth, value, password);
+      else { const result = await accessRequest<{ token: string }>('/username-login', 'POST', { username: value, password }); await signInWithCustomToken(auth, result.token); }
+      onLoginSuccess(await getAccessProfile());
+    } catch (err: any) { setError(err.code === 'auth/email-already-in-use' ? 'Email già registrata. Accedi o recupera la password.' : err.code === 'auth/weak-password' ? 'Usa una password di almeno 8 caratteri.' : err.code?.startsWith('auth/') ? 'Accesso non riuscito. Controlla le credenziali e riprova.' : err.message); } finally { setBusy(false); }
+  }
+  async function reset() {
+    if (!identifier.includes('@')) { setError('Inserisci la tua email per recuperare la password. Per un nome utente, contatta l’amministratore.'); return; }
+    setBusy(true); setError(''); try { await sendPasswordResetEmail(auth, identifier.trim()); setMessage('Se l’account esiste, riceverai le istruzioni per reimpostare la password.'); } catch { setError('Invio non riuscito. Riprova più tardi.'); } finally { setBusy(false); }
+  }
+  return <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4"><div className="card w-full max-w-md p-6 sm:p-8">
+    <div className="flex gap-3 items-center mb-6"><div className="app-brand-mark">GC</div><div><h1 className="text-xl font-bold">Gestione Congregazione</h1><p className="text-sm text-slate-500">{register ? 'Registrazione con email' : 'Accesso personale'}</p></div></div>
+    <form onSubmit={submit} className="space-y-4">
+      {register && <label className="block text-sm font-medium">Nome e cognome<input required autoComplete="name" className="inp mt-1" value={name} onChange={e => setName(e.target.value)} /></label>}
+      <label className="block text-sm font-medium">{register ? 'Email' : 'Email o nome utente'}<input required type={register ? 'email' : 'text'} autoComplete="username" className="inp mt-1" value={identifier} onChange={e => setIdentifier(e.target.value)} /></label>
+      <label className="block text-sm font-medium">Password<input required type="password" minLength={register ? 8 : undefined} autoComplete={register ? 'new-password' : 'current-password'} className="inp mt-1" value={password} onChange={e => setPassword(e.target.value)} /></label>
+      {error && <p role="alert" className="text-sm text-rose-700">{error}</p>}{message && <p role="status" className="text-sm text-emerald-700">{message}</p>}
+      <button disabled={busy} className="btn-primary w-full">{busy ? 'Attendi…' : register ? 'Registrati' : 'Accedi'}</button>
+      <button disabled={busy} type="button" className="w-full text-sm text-sky-700" onClick={() => { setRegister(!register); setError(''); }}>{register ? 'Hai già un account? Accedi' : 'Registrati con email'}</button>
+      {!register && <button disabled={busy} type="button" className="w-full text-sm text-slate-600" onClick={reset}>Password dimenticata?</button>}
+      <p className="text-xs text-slate-500">Le nuove registrazioni devono essere approvate dall’amministratore. I permessi sono assegnati a ogni utente.</p>
+    </form>
+  </div></div>;
 }
-
-export const LoginScreen: React.FC<LoginScreenProps> = ({ onLoginSuccess, adminPin, viewerPin }) => {
-  const [mode, setMode] = useState<'pin' | 'email'>('pin');
-  const [inputPin, setInputPin] = useState('');
-  const [pinError, setPinError] = useState<string | null>(null);
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [isRegistering, setIsRegistering] = useState(false);
-  const [emailError, setEmailError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-
-  const handlePinSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmed = inputPin.trim();
-    setPinError(null);
-    if (!trimmed) {
-      setPinError('Inserisci il codice PIN.');
-      return;
-    }
-    setLoading(true);
-    try {
-      let uid = 'pin-session';
-      try {
-        const cred = await signInAnonymously(auth);
-        uid = cred.user.uid;
-      } catch {
-        // L’accesso PIN può continuare in locale se Auth anonima non è disponibile.
-      }
-
-      if (trimmed === adminPin) {
-        onLoginSuccess({ uid, displayName: 'Amministratore', role: 'admin', isAnonymousPIN: true });
-      } else if (trimmed === viewerPin) {
-        onLoginSuccess({ uid, displayName: 'Consultazione', role: 'viewer', isAnonymousPIN: true });
-      } else {
-        setPinError('Codice PIN non valido.');
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleEmailSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setEmailError(null);
-    if (!email.trim() || !password.trim()) {
-      setEmailError('Compila email e password.');
-      return;
-    }
-    setLoading(true);
-    try {
-      const cred = isRegistering
-        ? await createUserWithEmailAndPassword(auth, email.trim(), password)
-        : await signInWithEmailAndPassword(auth, email.trim(), password);
-
-      // Finché i ruoli non sono gestiti da claim/server, l'accesso email è prudenzialmente sola lettura.
-      onLoginSuccess({
-        uid: cred.user.uid,
-        email: cred.user.email,
-        displayName: cred.user.email?.split('@')[0] || 'Operatore',
-        role: 'viewer',
-      });
-    } catch (err: any) {
-      const code = err?.code;
-      if (code === 'auth/invalid-credential' || code === 'auth/wrong-password') setEmailError('Credenziali non valide.');
-      else if (code === 'auth/user-not-found') setEmailError('Account non trovato.');
-      else if (code === 'auth/email-already-in-use') setEmailError('Questa email è già registrata.');
-      else if (code === 'auth/weak-password') setEmailError('La password deve contenere almeno 6 caratteri.');
-      else setEmailError('Impossibile completare l’accesso.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        <div className="bg-white border border-slate-200 rounded-2xl shadow-sm p-6 sm:p-8">
-          <div className="flex items-center gap-3 mb-7">
-            <div className="w-11 h-11 rounded-xl bg-sky-700 text-white flex items-center justify-center font-bold">GC</div>
-            <div>
-              <h1 className="text-xl font-bold text-slate-950">Gestione Congregazione</h1>
-              <p className="text-sm text-slate-500">Accedi alla pianificazione e agli incarichi</p>
-            </div>
-          </div>
-
-          <div className="login-tabs">
-            <button type="button" onClick={() => setMode('pin')} className={mode === 'pin' ? 'is-active' : ''}>
-              <Key className="w-4 h-4" /> PIN
-            </button>
-            <button type="button" onClick={() => setMode('email')} className={mode === 'email' ? 'is-active' : ''}>
-              <LogIn className="w-4 h-4" /> Email
-            </button>
-          </div>
-
-          {mode === 'pin' ? (
-            <form onSubmit={handlePinSubmit} className="space-y-4 mt-5">
-              <div>
-                <label className="form-label">Codice PIN</label>
-                <div className="relative">
-                  <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="password"
-                    inputMode="numeric"
-                    autoFocus
-                    value={inputPin}
-                    onChange={(e) => { setInputPin(e.target.value.replace(/\D/g, '').slice(0, 10)); setPinError(null); }}
-                    className="inp pl-10 text-base tracking-[0.3em]"
-                    placeholder="••••"
-                  />
-                </div>
-              </div>
-              {pinError && <div className="form-error"><AlertCircle className="w-4 h-4" /> {pinError}</div>}
-              <button className="btn-primary w-full py-2.5" disabled={loading}>
-                <ShieldCheck className="w-4 h-4" /> {loading ? 'Verifica…' : 'Accedi'}
-              </button>
-              <p className="text-xs text-slate-500 text-center">Usa il PIN assegnato al tuo livello di accesso.</p>
-            </form>
-          ) : (
-            <form onSubmit={handleEmailSubmit} className="space-y-4 mt-5">
-              <div>
-                <label className="form-label">Email</label>
-                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="inp" placeholder="nome@esempio.it" />
-              </div>
-              <div>
-                <label className="form-label">Password</label>
-                <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} className="inp" placeholder="Password" />
-              </div>
-              {emailError && <div className="form-error"><AlertCircle className="w-4 h-4" /> {emailError}</div>}
-              <button className="btn-primary w-full py-2.5" disabled={loading}>
-                {isRegistering ? <UserPlus className="w-4 h-4" /> : <LogIn className="w-4 h-4" />}
-                {loading ? 'Attendi…' : isRegistering ? 'Crea account' : 'Accedi'}
-              </button>
-              <button type="button" onClick={() => setIsRegistering((v) => !v)} className="w-full text-sm text-sky-700 hover:text-sky-900 font-medium">
-                {isRegistering ? 'Hai già un account? Accedi' : 'Non hai un account? Registrati'}
-              </button>
-              <p className="text-xs text-slate-500 text-center">Gli account email accedono in sola lettura finché i ruoli non vengono configurati lato server.</p>
-            </form>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
