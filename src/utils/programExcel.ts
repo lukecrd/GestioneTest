@@ -1,7 +1,7 @@
 import type { WorkBook } from 'xlsx';
 import type { Worksheet, Workbook } from 'exceljs';
 
-const margins = { left: 6 / 25.4, right: 6 / 25.4, top: 6 / 25.4, bottom: 6 / 25.4, header: 0, footer: 0 };
+const margins = { left: 6 / 25.4, right: 6 / 25.4, top: 3 / 25.4, bottom: 6 / 25.4, header: 0, footer: 0 };
 
 function setup(sheet: Worksheet, columns: number) {
   sheet.views = [{ showGridLines: false }];
