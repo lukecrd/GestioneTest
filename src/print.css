@@ -1,7 +1,7 @@
 /* Shared paper layout; outside component layers so print rules override utilities. */
 @page {
   size: A4 portrait;
-  margin: 12mm;
+  margin: 6mm;
 }
 
 @media print {
@@ -36,7 +36,7 @@
   .app-content .max-w-4xl {
     box-sizing: border-box !important;
     width: 100% !important;
-    max-width: 186mm !important;
+    max-width: 198mm !important;
     min-width: 0 !important;
     margin: 0 !important;
     padding: 0 !important;
