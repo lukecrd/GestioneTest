@@ -71,7 +71,7 @@ export function ServizioCampoPrintTemplate({ meetings, year, month, topic, defau
                 const special = meeting.isActive === false || (!!meeting.meetingType && meeting.meetingType !== 'standard');
                 const description = meeting.placeholder ? '' : meeting.isActive === false
                   ? `Adunanza sospesa${meeting.specialNote ? `: ${meeting.specialNote}` : ''}`
-                  : meeting.specialNote || meeting.notes || topic;
+                  : meeting.specialNote?.trim() || meeting.notes?.trim() || '';
                 return <tr className="field-service-meeting" key={meeting.id || `${meeting.dateStr}-${meeting.slotKey}-${index}`}>
                   <td>{DAYS[localDate(meeting.dateStr).getDay()]}</td>
                   <td>{meeting.time.replace(':', ',')}</td>
