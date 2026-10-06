@@ -1,0 +1,83 @@
+/* Shared paper layout; outside component layers so print rules override utilities. */
+@page {
+  size: A4 portrait;
+  margin: 3mm 6mm 6mm;
+}
+
+@media print {
+  html, body, #root {
+    width: 100% !important;
+    min-width: 0 !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
+    color: black !important;
+  }
+
+  .app-sidebar, .app-mobile-nav, .app-mobile-panel, .app-topbar,
+  .no-print, .toast {
+    display: none !important;
+  }
+
+  .app-shell, .app-main, .app-content, .tab-panel {
+    display: block !important;
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    min-height: 0 !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+
+  .print-sheet, .printable-area, .weekend-program,
+  .app-content .max-w-4xl {
+    box-sizing: border-box !important;
+    width: 100% !important;
+    max-width: 198mm !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: white !important;
+    color: black !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .table-wrapper, .tbl-wrap, .overflow-x-auto, .overflow-auto {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+
+  .app-content table {
+    width: 100% !important;
+    min-width: 0 !important;
+    table-layout: fixed !important;
+    border-collapse: collapse;
+    font-size: 9pt !important;
+  }
+
+  .app-content th, .app-content td {
+    min-width: 0 !important;
+    white-space: normal !important;
+    overflow-wrap: anywhere;
+    padding: 1.5mm 1mm !important;
+    color: black !important;
+  }
+
+  thead { display: table-header-group; }
+  tfoot { display: table-footer-group; }
+  tr, .weekend-program__week {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  h1, h2, h3, .prog-banner { break-after: avoid; }
+  img, svg { max-width: 100%; }
+  .printable-area > div:first-child { break-inside: avoid; }
+  .printable-area > div:first-child img { width: 35mm; height: 25mm; }
+  .week-cell { white-space: normal; }
+}

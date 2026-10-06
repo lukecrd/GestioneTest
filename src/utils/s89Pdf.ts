@@ -28,11 +28,11 @@ export function getS89FileName(studentName: string, partNumber?: string | number
 }
 
 /**
- * Disegna una singola pagina del foglietto S-89 su un documento jsPDF in formato A6
+ * Disegna una singola pagina del foglietto S-89 su un documento jsPDF in formato A4
  */
 export function renderS89Page(doc: jsPDF, item: S89Item): void {
-  const pageWidth = 105;
-  const margin = 12;
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const margin = 6;
   const rightEdge = pageWidth - margin;
 
   // Intestazione
@@ -145,7 +145,7 @@ export function renderS89Page(doc: jsPDF, item: S89Item): void {
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   doc.setTextColor(60, 60, 60);
-  doc.text('S-89-I   11/23', margin, 142);
+  doc.text('S-89-I   11/23', margin, doc.internal.pageSize.getHeight() - margin);
 }
 
 /**
@@ -156,7 +156,7 @@ export function downloadS89Pdf(item: S89Item): void {
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
-    format: 'a6', // 105 x 148 mm
+    format: 'a4', // 210 x 297 mm
   });
 
   renderS89Page(doc, item);
@@ -174,12 +174,12 @@ export function downloadCombinedS89Pdf(items: S89Item[], customFileName?: string
   const doc = new jsPDF({
     orientation: 'portrait',
     unit: 'mm',
-    format: 'a6',
+    format: 'a4',
   });
 
   items.forEach((item, index) => {
     if (index > 0) {
-      doc.addPage('a6', 'portrait');
+      doc.addPage('a4', 'portrait');
     }
     renderS89Page(doc, item);
   });
