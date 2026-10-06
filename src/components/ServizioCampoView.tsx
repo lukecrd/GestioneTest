@@ -2525,7 +2525,6 @@ await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(r
             {/* Footer Note */}
             <div className="mt-6 pt-4 border-t border-slate-300 flex justify-between text-[11px] text-slate-500">
               <span>Si prega i conduttori di arrivare con qualche minuto di anticipo sul luogo stabilito.</span>
-              <span>Dashboard Congregazione</span>
             </div>
           </div>
         </div>
