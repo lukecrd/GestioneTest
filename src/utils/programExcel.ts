@@ -1,7 +1,7 @@
 import type { WorkBook } from 'xlsx';
 import type { Worksheet, Workbook } from 'exceljs';
 
-const margins = { left: 12 / 25.4, right: 12 / 25.4, top: 12 / 25.4, bottom: 12 / 25.4, header: 0, footer: 0 };
+const margins = { left: 6 / 25.4, right: 6 / 25.4, top: 6 / 25.4, bottom: 6 / 25.4, header: 0, footer: 0 };
 
 function setup(sheet: Worksheet, columns: number) {
   sheet.views = [{ showGridLines: false }];
@@ -159,7 +159,7 @@ export async function exportProgramExcel(source: WorkBook, filename: string, sel
       else if (rule instanceof CSSImportRule && rule.styleSheet) collect(rule.styleSheet.cssRules);
     });
     for (const sheet of Array.from(document.styleSheets)) { try { collect(sheet.cssRules); } catch { /* Cross-origin stylesheet has no program-specific rules. */ } }
-    style.textContent = printRules.join('\n') + '\nheader {display:block!important} .app-content{width:703px!important} .print-only{display:inline!important} .no-print{display:none!important}';
+    style.textContent = printRules.join('\n') + '\nheader {display:block!important} .app-content{width:748px!important} .print-only{display:inline!important} .no-print{display:none!important}';
     doc.head.appendChild(style);
     await Promise.all(Array.from(doc.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')).map(link => link.sheet ? Promise.resolve() : new Promise<void>((resolve, reject) => { link.onload = () => resolve(); link.onerror = () => reject(new Error('Impossibile caricare lo stile del programma.')); })));
     await doc.fonts.ready;
