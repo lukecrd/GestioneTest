@@ -1272,8 +1272,8 @@ try {
               </p>
             </div>
             <img
-              src="/opera_pubblica_cart.svg"
-              alt="Opera Pubblica"
+              src="/opera_pubblica_illustrazione.png"
+              alt="Due persone accanto a un espositore di pubblicazioni"
               referrerPolicy="no-referrer"
               className="w-24 h-20 object-contain rounded-lg border border-indigo-500/30 bg-amber-50/10 p-1 shrink-0 hidden sm:block"
             />
@@ -3019,8 +3019,8 @@ try {
               </div>
               <div className="shrink-0 flex items-center justify-end">
                 <img
-                  src="/opera_pubblica_cart.svg"
-                  alt="Opera Pubblica"
+                  src="/opera_pubblica_illustrazione.png"
+                  alt="Due persone accanto a un espositore di pubblicazioni"
                   referrerPolicy="no-referrer"
                   className="w-40 sm:w-48 h-28 sm:h-32 object-contain"
                 />
