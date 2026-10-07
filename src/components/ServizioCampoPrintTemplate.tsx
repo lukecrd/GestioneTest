@@ -61,19 +61,18 @@ export function ServizioCampoPrintTemplate({ meetings, year, month, topic, defau
         <h1>Programma adunanze per il servizio di campo</h1>
         <h2>Mese di {monthLabel}</h2>
         <img className="field-service-banner__people" src="/servizio-campo-gruppo.jpg" alt="" />
-      </div></td></tr><tr><th>Giorno</th><th>Ora</th><th>Conduttore</th><th>Luogo</th><th aria-label="Argomento" /></tr></thead>
+      </div></td></tr><tr><th>Giorno / Data</th><th>Ora</th><th>Conduttore</th><th>Luogo</th><th aria-label="Argomento" /></tr></thead>
         <tbody>
           <tr className="field-service-topic"><td colSpan={5}>Cosa trattare? {topic}</td></tr>
           {weeks.map(week => (
             <React.Fragment key={iso(week.start)}>
-              <tr className="field-service-week"><td colSpan={5}>Settimana del {week.start.getDate()} {MONTHS[week.start.getMonth()]}</td></tr>
               {week.meetings.map((meeting, index) => {
                 const special = meeting.isActive === false || (!!meeting.meetingType && meeting.meetingType !== 'standard');
                 const description = meeting.placeholder ? '' : meeting.isActive === false
                   ? `Adunanza sospesa${meeting.specialNote ? `: ${meeting.specialNote}` : ''}`
                   : meeting.specialNote?.trim() || meeting.notes?.trim() || '';
                 return <tr className="field-service-meeting" key={meeting.id || `${meeting.dateStr}-${meeting.slotKey}-${index}`}>
-                  <td>{DAYS[localDate(meeting.dateStr).getDay()]}</td>
+                  <td>{DAYS[localDate(meeting.dateStr).getDay()]}<br />{meeting.dateStr.split('-').reverse().join('/')}</td>
                   <td>{meeting.time.replace(':', ',')}</td>
                   <td>{meeting.isActive === false ? '' : meeting.conductorName}</td>
                   <td>{meeting.isActive === false ? '' : meeting.location}</td>
