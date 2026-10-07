@@ -63,7 +63,6 @@ export function ServizioCampoPrintTemplate({ meetings, year, month, topic, defau
         <img className="field-service-banner__people" src="/servizio-campo-gruppo.jpg" alt="" />
       </div></td></tr><tr><th>Giorno / Data</th><th>Ora</th><th>Conduttore</th><th>Luogo</th><th aria-label="Argomento" /></tr></thead>
         <tbody>
-          <tr className="field-service-topic"><td colSpan={5}>Cosa trattare? {topic}</td></tr>
           {weeks.map(week => (
             <React.Fragment key={iso(week.start)}>
               {week.meetings.map((meeting, index) => {
@@ -81,6 +80,7 @@ export function ServizioCampoPrintTemplate({ meetings, year, month, topic, defau
               })}
             </React.Fragment>
           ))}
+          <tr className="field-service-topic"><td colSpan={5}>Cosa trattare? {topic}</td></tr>
         </tbody>
       </table>
     </div>
