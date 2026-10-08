@@ -12,7 +12,9 @@ export interface PersonRoles {
   uscieri: boolean;
   console: boolean;
   microfoni: boolean;
-  presidente: boolean;
+  presidente: boolean; // legacy alias for presidentePubblica
+  presidentePubblica?: boolean;
+  presidenteInfrasettimanale?: boolean;
   preghiera: boolean;
   lettore: boolean;
 }
