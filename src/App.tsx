@@ -1,4 +1,3 @@
-import { SundayPresidentsList } from './components/SundayPresidentsList';
 import { personNameKey, duplicatePersonNames, syncRegistryLinks } from './utils/peopleRegistry';
 import { exportProgramExcel } from './utils/programExcel';
 import React, { useState, useEffect, useRef } from 'react';
@@ -465,11 +464,13 @@ export default function App() {
     console: false,
     microfoni: false,
     presidente: false,
+    presidentePubblica: false,
+    presidenteInfrasettimanale: false,
     preghiera: false,
     lettore: false,
   });
   const [peopleSearch, setPeopleSearch] = useState('');
-  const [anagraficaFilter, setAnagraficaFilter] = useState<'all' | 'M' | 'F' | 'uscieri' | 'console' | 'microfoni' | 'presidente' | 'lettore' | 'preghiera'>('all');
+  const [anagraficaFilter, setAnagraficaFilter] = useState<'all' | 'M' | 'F' | 'uscieri' | 'console' | 'microfoni' | 'presidente' | 'presidenteInfrasettimanale' | 'lettore' | 'preghiera'>('all');
   const [showPersonEditor, setShowPersonEditor] = useState(false);
   const [showExcelImportModal, setShowExcelImportModal] = useState(false);
 
@@ -483,6 +484,8 @@ export default function App() {
       console: false,
       microfoni: false,
       presidente: false,
+    presidentePubblica: false,
+    presidenteInfrasettimanale: false,
       preghiera: false,
       lettore: false,
     });
@@ -535,7 +538,7 @@ export default function App() {
     setPersonName(p.name);
     setPersonGender(p.gender);
     setPersonSpouse(p.spouseId || '');
-    setRoles({ ...p.roles });
+    setRoles({ ...p.roles, presidentePubblica: !!p.roles.presidentePubblica, presidenteInfrasettimanale: !!p.roles.presidenteInfrasettimanale });
     setShowPersonEditor(true);
   };
 
@@ -1171,18 +1174,10 @@ try {
     ? [...importedOctoberRows, { date: addDays(importedOctoberRows[importedOctoberRows.length - 1].date, 7), placeholder: true, oratore: '', congregazione: '', titoloDiscorso: '', presidente: '', lettore: '' }]
     : importedOctoberRows;
 
-  const toggleSundayPresident = (personId: string, enabled: boolean) => {
-    if (!checkAdminPermission()) return;
-    const person = state.people.find(p => p.id === personId);
-    if (!person || (enabled && person.gender !== 'M')) return;
-    saveState({ ...state, people: state.people.map(p => p.id === personId ? { ...p, roles: { ...p.roles, presidente: enabled } } : p) });
-    showToast(enabled ? 'Presidente aggiunto alla lista della domenica' : 'Abilitazione di presidente della domenica rimossa');
-  };
-
   const generateDomenica = (y: number, m: number) => {
     if (!checkAdminPermission()) return;
     const sundays = sundayDates(y, m);
-    const presPool = state.people.filter(p => p.roles.presidente);
+    const presPool = state.people.filter(p => p.roles.presidentePubblica);
     const lettPool = state.people.filter(p => p.roles.lettore);
     const pc: Record<string, number> = {}, pl: Record<string, number> = {};
     const lc: Record<string, number> = {}, ll: Record<string, number> = {};
@@ -1302,7 +1297,7 @@ try {
       </>;
     }
 
-    const role = field === 'presidente' ? 'presidente' : 'lettore';
+    const role = field === 'presidente' ? 'presidentePubblica' : 'lettore';
     const eligible = state.people.filter(person => person.roles[role]);
     return <>
       <select className="weekend-program__edit no-print" value={current} onChange={e => updateDomenicaField(rowIndex, field, e.target.value)}>
@@ -1458,7 +1453,8 @@ try {
       if (anagraficaFilter === 'uscieri') return p.roles.uscieri;
       if (anagraficaFilter === 'console') return p.roles.console;
       if (anagraficaFilter === 'microfoni') return p.roles.microfoni;
-      if (anagraficaFilter === 'presidente') return p.roles.presidente;
+      if (anagraficaFilter === 'presidenteInfrasettimanale') return p.roles.presidenteInfrasettimanale;
+      if (anagraficaFilter === 'presidente') return p.roles.presidentePubblica;
       if (anagraficaFilter === 'lettore') return p.roles.lettore;
       if (anagraficaFilter === 'preghiera') return p.roles.preghiera;
       return true;
@@ -1471,7 +1467,7 @@ try {
   const countConsole = state.people.filter(p => p.roles.console).length;
   const countMic = state.people.filter(p => p.roles.microfoni).length;
   const registryDuplicates = duplicatePersonNames(state.people);
-  const countPres = state.people.filter(p => p.roles.presidente).length;
+  const countPres = state.people.filter(p => p.roles.presidentePubblica).length;
   const countLett = state.people.filter(p => p.roles.lettore).length;
   const countPreg = state.people.filter(p => p.roles.preghiera).length;
 
@@ -1754,12 +1750,17 @@ try {
                     /> Microfonista
                   </label>
                   <label className="chk">
+                    <input type="checkbox" checked={roles.presidenteInfrasettimanale}
+                      onChange={e => setRoles({ ...roles, presidenteInfrasettimanale: e.target.checked })} className="accent-sky-600" />
+                    Presidente adunanza infrasettimanale
+                  </label>
+                  <label className="chk">
                     <input
                       type="checkbox"
-                      checked={roles.presidente}
-                      onChange={e => setRoles({ ...roles, presidente: e.target.checked })}
+                      checked={roles.presidentePubblica}
+                      onChange={e => setRoles({ ...roles, presidentePubblica: e.target.checked })}
                       className="accent-sky-600"
-                    /> Presidente adunanza pubblica (domenica)
+                    /> Presidente adunanza pubblica
                   </label>
                   <label className="chk">
                     <input
@@ -1910,6 +1911,9 @@ try {
               >
                 Microfoni ({countMic})
               </button>
+              <button onClick={() => setAnagraficaFilter('presidenteInfrasettimanale')} className="text-xs px-2.5 py-1 rounded-full font-semibold bg-indigo-50 text-indigo-800">
+                Presidenti infrasettimanale ({state.people.filter(p => p.roles.presidenteInfrasettimanale).length})
+              </button>
               <button
                 onClick={() => setAnagraficaFilter('presidente')}
                 className={`text-xs px-2.5 py-1 rounded-full font-semibold transition-colors ${
@@ -1918,7 +1922,7 @@ try {
                     : 'bg-purple-50 text-purple-800 dark:bg-purple-950/60 dark:text-purple-300 hover:bg-purple-100'
                 }`}
               >
-                Presidenti ({countPres})
+                Presidenti pubblica ({countPres})
               </button>
               <button
                 onClick={() => setAnagraficaFilter('lettore')}
@@ -1942,7 +1946,8 @@ try {
                     <th className="text-center font-bold">Usc.</th>
                     <th className="text-center font-bold">A/V</th>
                     <th className="text-center font-bold">Micr.</th>
-                    <th className="text-center font-bold">Pres.</th>
+                    <th className="text-center font-bold" title="Presidente adunanza infrasettimanale">Pres. infr.</th>
+                    <th className="text-center font-bold" title="Presidente adunanza pubblica">Pres. pub.</th>
                     <th className="text-center font-bold">Pregh.</th>
                     <th className="text-center font-bold">Lett.</th>
                     <th className="text-right font-bold">Azioni</th>
@@ -1970,7 +1975,8 @@ try {
                         <td className="text-center">{chk(p.roles.uscieri)}</td>
                         <td className="text-center">{chk(p.roles.console)}</td>
                         <td className="text-center">{chk(p.roles.microfoni)}</td>
-                        <td className="text-center">{chk(p.roles.presidente)}</td>
+                        <td className="text-center">{chk(!!p.roles.presidenteInfrasettimanale)}</td>
+                        <td className="text-center">{chk(!!p.roles.presidentePubblica)}</td>
                         <td className="text-center">{chk(p.roles.preghiera)}</td>
                         <td className="text-center">{chk(p.roles.lettore)}</td>
                         <td className="text-right whitespace-nowrap">
@@ -2331,7 +2337,6 @@ try {
               <p className="page-description">Pianifica oratore, titolo del discorso pubblico, presidente e lettore per le domeniche del mese.</p>
             </div>
           </div>
-          <SundayPresidentsList people={state.people} isAdmin={currentUser.role === 'admin'} onChange={toggleSundayPresident} onOpenRegistry={() => setActiveTab('anagrafica')} />
           <div className="card no-print">
             <div className="flex items-center gap-2 mb-1 pb-2 border-b border-slate-100 dark:border-slate-800">
               <CalendarDays className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
