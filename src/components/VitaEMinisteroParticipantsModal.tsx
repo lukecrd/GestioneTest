@@ -317,7 +317,7 @@ export function VitaEMinisteroParticipantsModal({
         personId: cp.id,
         roles: isM
           ? {
-              presidente: !!cp.roles?.presidente,
+              presidente: !!cp.roles?.presidenteInfrasettimanale,
               preghiera: !!cp.roles?.preghiera,
               tesoriDiscorso: !!cp.roles?.presidente, // presumibilmente anziano/SM
               tesoriGemme: true,
@@ -539,11 +539,13 @@ export function VitaEMinisteroParticipantsModal({
                 }`}>
                   <input
                     type="checkbox"
-                    checked={formRoles.presidente}
+                    checked={formPersonId ? !!congregationPeople.find(person => person.id === formPersonId)?.roles.presidenteInfrasettimanale : formRoles.presidente}
+                    disabled={!!formPersonId}
+                    title={formPersonId ? 'Modifica questa abilitazione nell’anagrafica generale' : undefined}
                     onChange={e => setFormRoles({ ...formRoles, presidente: e.target.checked })}
                     className="accent-indigo-600 w-4 h-4 rounded"
                   />
-                  <span>Presidente adunanza</span>
+                  <span>Presidente adunanza infrasettimanale{formPersonId && ' (anagrafica)'}</span>
                 </label>
 
                 {/* Preghiera */}
