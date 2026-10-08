@@ -1,3 +1,5 @@
+import { SundayPresidentsList } from './components/SundayPresidentsList';
+import { personNameKey, duplicatePersonNames, syncRegistryLinks } from './utils/peopleRegistry';
 import { exportProgramExcel } from './utils/programExcel';
 import React, { useState, useEffect, useRef } from 'react';
 import * as XLSX from 'xlsx';
@@ -102,7 +104,7 @@ function normalize(s: any): StateData {
   const vitaEMinistero = s.vitaEMinistero || DEFAULT_VITA_MINISTERO_DATA;
   const programResponsibles = s.programResponsibles && typeof s.programResponsibles === 'object' ? s.programResponsibles : {};
 
-  return { people, unavail, special, groups, mensileArchives, adminPin, viewerPin, operaPubblica, servizioCampo, vitaEMinistero, programResponsibles };
+  return syncRegistryLinks({ people, unavail, special, groups, mensileArchives, adminPin, viewerPin, operaPubblica, servizioCampo, vitaEMinistero, programResponsibles });
 }
 
 function loadInitialState(): StateData {
@@ -230,6 +232,7 @@ export default function App() {
 
   // Auto-save & Remote Firestore sync handler
   const saveState = (newState: StateData) => {
+    newState = normalize(newState);
     setState(newState);
     storage.set(STORAGE_KEY, JSON.stringify(newState));
     setSyncMsg('Salvataggio Cloud…');
@@ -488,8 +491,12 @@ export default function App() {
   const handlePersonSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!checkAdminPermission()) return;
-    const name = personName.trim();
+    const name = personName.trim().replace(/\s+/g, ' ');
     if (!name) return;
+    if (state.people.some(person => person.id !== personId && personNameKey(person.name) === personNameKey(name))) {
+      showToast('Questo nominativo è già in anagrafica. Modifica la persona esistente.');
+      return;
+    }
     const id = personId || uid();
     const newPerson: Person = {
       id,
@@ -565,7 +572,7 @@ export default function App() {
 
     peopleToAdd.forEach(importedPerson => {
       const existingIdx = currentPeople.findIndex(
-        p => p.name.trim().toLowerCase() === importedPerson.name.trim().toLowerCase()
+        p => personNameKey(p.name) === personNameKey(importedPerson.name)
       );
 
       if (existingIdx >= 0) {
@@ -1164,6 +1171,14 @@ try {
     ? [...importedOctoberRows, { date: addDays(importedOctoberRows[importedOctoberRows.length - 1].date, 7), placeholder: true, oratore: '', congregazione: '', titoloDiscorso: '', presidente: '', lettore: '' }]
     : importedOctoberRows;
 
+  const toggleSundayPresident = (personId: string, enabled: boolean) => {
+    if (!checkAdminPermission()) return;
+    const person = state.people.find(p => p.id === personId);
+    if (!person || (enabled && person.gender !== 'M')) return;
+    saveState({ ...state, people: state.people.map(p => p.id === personId ? { ...p, roles: { ...p.roles, presidente: enabled } } : p) });
+    showToast(enabled ? 'Presidente aggiunto alla lista della domenica' : 'Abilitazione di presidente della domenica rimossa');
+  };
+
   const generateDomenica = (y: number, m: number) => {
     if (!checkAdminPermission()) return;
     const sundays = sundayDates(y, m);
@@ -1203,7 +1218,7 @@ try {
         oratore: sample?.oratore || '',
         congregazione: sample?.congregazione || '',
         titoloDiscorso: sample?.titoloDiscorso || '',
-        presidente: sample?.presidente || pres?.name || '—',
+        presidente: pres?.name || '—',
         lettore: sample?.lettore || lett?.name || '—',
       };
 
@@ -1455,6 +1470,7 @@ try {
   const countUscieri = state.people.filter(p => p.roles.uscieri).length;
   const countConsole = state.people.filter(p => p.roles.console).length;
   const countMic = state.people.filter(p => p.roles.microfoni).length;
+  const registryDuplicates = duplicatePersonNames(state.people);
   const countPres = state.people.filter(p => p.roles.presidente).length;
   const countLett = state.people.filter(p => p.roles.lettore).length;
   const countPreg = state.people.filter(p => p.roles.preghiera).length;
@@ -1589,6 +1605,10 @@ try {
             )}
           </div>
 
+          {registryDuplicates.length > 0 && <div role="alert" className="status-banner text-amber-700">
+            Nominativi ripetuti nell’anagrafica generale: {registryDuplicates.join(', ')}. Verifica i record; nessuna persona viene eliminata automaticamente.
+          </div>}
+          <p className="text-sm text-slate-500">Anagrafica generale unica. Le liste dei programmi aggiungono abilitazioni e disponibilità ai nominativi collegati.</p>
           {/* Quick statistics */}
           <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2.5">
             <div className="metric-card compact">
@@ -1739,7 +1759,7 @@ try {
                       checked={roles.presidente}
                       onChange={e => setRoles({ ...roles, presidente: e.target.checked })}
                       className="accent-sky-600"
-                    /> Presidente
+                    /> Presidente adunanza pubblica (domenica)
                   </label>
                   <label className="chk">
                     <input
@@ -2311,6 +2331,7 @@ try {
               <p className="page-description">Pianifica oratore, titolo del discorso pubblico, presidente e lettore per le domeniche del mese.</p>
             </div>
           </div>
+          <SundayPresidentsList people={state.people} isAdmin={currentUser.role === 'admin'} onChange={toggleSundayPresident} onOpenRegistry={() => setActiveTab('anagrafica')} />
           <div className="card no-print">
             <div className="flex items-center gap-2 mb-1 pb-2 border-b border-slate-100 dark:border-slate-800">
               <CalendarDays className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
