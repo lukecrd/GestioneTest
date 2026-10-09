@@ -1,6 +1,8 @@
+import { generateVitaAssignments } from '../utils/automaticScheduling';
 import { fetchWolJson } from '../utils/wolApi';
 import React, { useState } from 'react';
 import {
+  SchedulingPrograms,
   StateData,
   VitaEMinisteroData,
   VitaEMinisteroMeeting,
@@ -59,6 +61,7 @@ import {
 
 interface VitaEMinisteroViewProps {
   state: StateData;
+  activePrograms?: SchedulingPrograms;
   onSaveState: (newState: StateData) => void;
   isAdmin: boolean;
   onShowToast: (msg: string) => void;
@@ -72,6 +75,7 @@ const MESI_FULL = [
 
 export function VitaEMinisteroView({
   state,
+  activePrograms,
   onSaveState,
   isAdmin,
   onShowToast,
@@ -79,6 +83,8 @@ export function VitaEMinisteroView({
 }: VitaEMinisteroViewProps) {
   // Current active sub-tab
   const [activeSubTab, setActiveSubTab] = useState<'programma' | 'nominativi' | 'statistiche' | 'stampa'>('programma');
+
+  const [generationWarnings, setGenerationWarnings] = useState<string[]>([]);
 
   // WOL sync modal state
   const [isWolModalOpen, setIsWolModalOpen] = useState<boolean>(false);
@@ -203,6 +209,20 @@ export function VitaEMinisteroView({
     }
     return true;
   });
+
+  const handleAutoGenerate = () => {
+    if (!checkAdminPermission()) return;
+    const result = generateVitaAssignments(state, vmData, selectedYear, selectedMonth, activePrograms);
+    setGenerationWarnings(result.warnings);
+    if (!result.generatedCount) {
+      onShowToast('Nessuna adunanza ordinaria da generare nel mese selezionato. Scarica prima il programma da WOL.');
+      return;
+    }
+    handleUpdateMeetings(result.meetings);
+    onShowToast(result.warnings.length
+      ? `Generazione completata: ${result.warnings.length} segnalazioni da verificare.`
+      : 'Nominativi assegnati in ordine di ultima assegnazione, senza sovrapposizioni nella stessa data.');
+  };
 
   const handlePrevMonth = () => {
     if (selectedMonth === 0) {
@@ -781,6 +801,15 @@ export function VitaEMinisteroView({
               {isAdmin && (
                 <>
                   <button
+                    onClick={handleAutoGenerate}
+                    disabled={isQuickSyncing || meetingsInMonth.length === 0}
+                    title="Rigenera i nominativi del mese: priorità a chi non ha incarichi da più tempo, rispettando abilitazioni, indisponibilità e altri programmi."
+                    className="px-3 py-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg flex items-center gap-1.5"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    Genera automaticamente
+                  </button>
+                  <button
                     onClick={() => setIsWolModalOpen(true)}
                     className="px-3 py-1.5 text-xs font-bold bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-800 rounded-lg flex items-center gap-1.5 shadow-xs transition-colors"
                   >
@@ -799,6 +828,13 @@ export function VitaEMinisteroView({
               )}
             </div>
           </div>
+
+          {generationWarnings.length > 0 && (
+            <div className="card no-print border-amber-300 bg-amber-50 dark:bg-amber-950/30 text-xs" role="status">
+              <p className="font-bold mb-2">Incarichi da verificare</p>
+              <ul className="list-disc pl-4 space-y-1">{generationWarnings.map((warning, i) => <li key={i}>{warning}</li>)}</ul>
+            </div>
+          )}
 
           {/* List of Meetings in this month */}
           {meetingsInMonth.length === 0 ? (
