@@ -1,4 +1,5 @@
 import { ServizioCampoPrintTemplate, DEFAULT_FIELD_TOPIC } from './ServizioCampoPrintTemplate';
+import { createSchedulingLedger } from '../utils/automaticScheduling';
 import { exportProgramExcel } from '../utils/programExcel';
 import React, { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
@@ -43,6 +44,7 @@ import {
   X
 } from 'lucide-react';
 import {
+  SchedulingPrograms,
   StateData,
   ServizioCampoData,
   ServizioCampoConductor,
@@ -55,6 +57,7 @@ import {
 
 interface ServizioCampoViewProps {
   state: StateData;
+  activePrograms?: SchedulingPrograms;
   onSaveState: (newState: StateData) => void;
   isAdmin: boolean;
   onShowToast: (msg: string) => void;
@@ -224,6 +227,7 @@ function getDayOfWeekFromDate(dateStr: string): 'lunedi' | 'martedi' | 'mercoled
 
 export function ServizioCampoView({
   state,
+  activePrograms,
   onSaveState,
   isAdmin,
   onShowToast,
@@ -232,6 +236,7 @@ export function ServizioCampoView({
   const now = new Date();
   const [selectedMonth, setSelectedMonth] = useState<number>(now.getMonth());
   const [selectedYear, setSelectedYear] = useState<number>(now.getFullYear());
+  const [generationWarnings, setGenerationWarnings] = useState<string[]>([]);
   const [activeSubTab, setActiveSubTab] = useState<'programma' | 'conduttori' | 'luoghi' | 'statistiche' | 'stampa'>('programma');
 
   // Modal / Form for adding a Special Date (Festivo / Unificata / etc.)
@@ -438,11 +443,15 @@ export function ServizioCampoView({
       return;
     }
 
+    const ledger = createSchedulingLedger(state, activePrograms, {
+      program: 'servizioCampo', dates: currentMonthSchedule.map(meeting => meeting.dateStr),
+    });
+    const warnings: string[] = [];
     const usageCounts: Record<string, number> = {};
     conductors.forEach(c => (usageCounts[c.id] = 0));
 
     // Count all-time usage to balance long-term
-    schedule.forEach(s => {
+    schedule.filter(s => s.isActive !== false && !currentMonthSchedule.some(m => m.dateStr === s.dateStr)).forEach(s => {
       if (s.conductorId && usageCounts[s.conductorId] !== undefined) {
         usageCounts[s.conductorId]++;
       }
@@ -455,6 +464,7 @@ export function ServizioCampoView({
     let autoRotationIndex = 0;
 
     const newMonthSchedule: ServizioCampoMeetingAssignment[] = currentMonthSchedule.map(meeting => {
+      if (meeting.isActive === false) return meeting;
       const slotKey = meeting.slotKey;
       const slotDef = defaultSettings[slotKey] || DEFAULT_SLOT_SETTINGS[slotKey] || DEFAULT_SLOT_SETTINGS.speciale;
       const specialNote = meeting.specialNote || state.special[meeting.dateStr] || '';
@@ -471,6 +481,7 @@ export function ServizioCampoView({
       // Find available candidates
       const candidates = conductors.filter(c => {
         if (c.isActive === false) return false;
+        if (ledger.isBusy(c, meeting.dateStr) || ledger.isUnavailable(c, meeting.dateStr)) return false;
 
         // For standard slotKeys, check specific availability; for 'speciale' slots, any active conductor can be considered
         if (slotKey !== 'speciale' && c.availability && !c.availability[slotKey]) {
@@ -485,8 +496,10 @@ export function ServizioCampoView({
       });
 
       if (candidates.length === 0) {
+        warnings.push(`${meeting.dateStr} ${meeting.time}: conduttore da assegnare.`);
         return {
           ...meeting,
+          conductorId: null,
           time: meeting.time || slotDef.time,
           location: meetingLocation,
           specialNote
@@ -510,6 +523,7 @@ export function ServizioCampoView({
       });
 
       const picked = candidates[0];
+      ledger.reserve(picked, meeting.dateStr);
       monthUsageCounts[picked.id] = (monthUsageCounts[picked.id] || 0) + 1;
       usageCounts[picked.id] = (usageCounts[picked.id] || 0) + 1;
       lastConductorId = picked.id;
@@ -537,7 +551,8 @@ export function ServizioCampoView({
       schedule: [...otherSchedules, ...newMonthSchedule]
     });
 
-    onShowToast(`Programma per ${MESI[selectedMonth]} ${selectedYear} generato con luoghi a rotazione e conduttori assegnati!`);
+    setGenerationWarnings(warnings);
+    onShowToast(warnings.length ? `Programma generato: ${warnings.length} conduttori da assegnare, senza duplicare incarichi.` : 'Programma generato senza sovrapposizioni nella stessa data.');
   };
 
   const handleClearMonth = () => {
@@ -1202,6 +1217,12 @@ await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(r
       {/* ======================================================== */}
       {/* SUBTAB 1: PROGRAMMA MESE                                */}
       {/* ======================================================== */}
+      {activeSubTab === 'programma' && generationWarnings.length > 0 && (
+        <div className="card no-print border-amber-300 bg-amber-50 dark:bg-amber-950/30 text-xs" role="status">
+          <p className="font-bold mb-2">Incarichi da completare</p>
+          <ul className="list-disc pl-4 space-y-1">{generationWarnings.map((warning, i) => <li key={i}>{warning}</li>)}</ul>
+        </div>
+      )}
       {activeSubTab === 'programma' && (
         <div className="space-y-6">
           {/* Controls Bar */}
