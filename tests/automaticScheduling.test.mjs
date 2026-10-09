@@ -181,7 +181,7 @@ test('monthly generator leaves gaps instead of assigning duplicate roles or a pe
   const state = base({ people, vitaEMinistero: { participants: [participant('vm', {}, 'A')], meetings: [meeting('v', '2026-10-07', { tesoriLetturaReaderId: 'vm' })] } });
   let rows;
   invokeGenerator('src/App.tsx', 'generateMensile', {
-    args: [2026, 9], state, menRows: null, domenicaProgramRows: null, checkAdminPermission: () => true,
+    args: [2026, 9], state, menRows: null, allDomenicaRows: null, domenicaProgramRows: null, checkAdminPermission: () => true,
     sundayDates: () => [new Date('2026-10-04T12:00:00')], iso, addDays, weeklyDates, createSchedulingLedger,
     fairPick: (pool, counts, last, index, exclude) => pool.find(p => !exclude.includes(p.id)),
     markUsed: noop, consolePairValid: () => true, MESI: Array(12).fill('Mese'), fmtShort: iso,
@@ -197,12 +197,12 @@ test('Sunday generation respects existing monthly roles and removes the fixed sa
   const state = base({ people: ['A', 'B'].map(id => ({ ...person(id), roles: { presidentePubblica: true, lettore: true } })) });
   let rows;
   invokeGenerator('src/App.tsx', 'generateDomenica', {
-    args: [2026, 9], state, menRows: [{ date: new Date('2026-10-11T12:00:00'), auditorium: 'A' }], domenicaProgramRows: null,
+    args: [2026, 9], state, menRows: [{ date: new Date('2026-10-11T12:00:00'), auditorium: 'A' }], allDomenicaRows: [], domenicaProgramRows: null,
     checkAdminPermission: () => true, sundayDates: () => [new Date('2026-10-11T12:00:00')],
     iso, addDays, createSchedulingLedger, OCTOBRE_2026_WEEKEND: { '2026-10-11': { lettore: 'A' } },
     fairPick: (pool, counts, last, index, exclude) => pool.find(p => !exclude.includes(p.id)),
     markUsed: noop, MESI: Array(12).fill('Mese'), fmtDate: iso,
-    setDomTitle: noop, setDomRows: value => { rows = value; }, setDomWarn: noop, syncActivePrograms: noop,
+    setDomTitle: noop, setDomRows: noop, setDomWarn: noop, syncActivePrograms: value => { rows = value.domRows; },
   });
   assert.equal(rows[0].presidente, 'B');
   assert.equal(rows[0].lettore, '—');
