@@ -344,6 +344,12 @@ export interface DomenicaRow {
 
 export type ChecklistProgramKey = 'mensile' | 'domenica' | 'vitaEMinistero' | 'servizioCampo' | 'operaPubblica';
 
+/** Active weekly and Sunday programmes, shared with every automatic generator. */
+export interface SchedulingPrograms {
+  mensileRows?: MensileRow[] | null;
+  domenicaRows?: DomenicaRow[] | null;
+}
+
 export interface ProgramResponsible {
   name: string;
   email: string;
