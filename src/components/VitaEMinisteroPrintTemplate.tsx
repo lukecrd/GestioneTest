@@ -31,7 +31,7 @@ export function VitaEMinisteroPrintTemplate({ meetings, participants, congregati
             {section('VITA CRISTIANA', 'life')}
             {line(m.canticoIntermedio || '')}
             {(m.vitaCristianaParts || []).map(p => line(`${p.number}. ${p.title} (${p.minutes} min)`, name(p.speakerId), p.id))}
-            {line(`${Math.max(3, ...(m.ministeroParts || []).map(p => p.number), ...(m.vitaCristianaParts || []).map(p => p.number)) + 1}. ${m.studioBiblicoTitle || 'Studio biblico di congregazione'} (${m.studioBiblicoMinutes || 30} min)`, names(m.studioBiblicoConductorId, m.studioBiblicoReaderId))}
+            {line(`${Math.max(3, ...(m.ministeroParts || []).map(p => p.number), ...(m.vitaCristianaParts || []).map(p => p.number)) + 1}. ${m.studioBiblicoType === 'discorsoSorvegliante' ? `Discorso del sorvegliante${m.discorsoSorveglianteTitle?.trim() ? `: ${m.discorsoSorveglianteTitle.trim()}` : ''}` : m.studioBiblicoTitle || 'Studio biblico di congregazione'} (${m.studioBiblicoMinutes || 30} min)`, m.studioBiblicoType === 'discorsoSorvegliante' ? 'Sorvegliante di circoscrizione' : names(m.studioBiblicoConductorId, m.studioBiblicoReaderId))}
             {line('Commenti conclusivi')}
             <tr className="vm-line vm-finale"><td>{m.canticoFinale || ''}</td><td className="vm-role">Preghiera</td><td>{name(m.preghieraFinaleId)}</td></tr>
           </>}
