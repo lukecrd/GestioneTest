@@ -273,8 +273,9 @@ export function VitaEMinisteroView({
             const ep = existing.ministeroParts.find(p => p.number === wp.number) || existing.ministeroParts[idx];
             return {
               ...wp,
+              hasAssistant: ep?.hasAssistant ?? wp.hasAssistant,
               studentId: ep?.studentId || '',
-              assistantId: ep?.assistantId || '',
+              assistantId: (ep?.hasAssistant ?? wp.hasAssistant) ? ep?.assistantId || '' : '',
               isSent: ep?.isSent || false,
               room: ep?.room || 'main',
               // Mantiene i tipi di parte già impostati manualmente in precedenza,
@@ -625,7 +626,8 @@ export function VitaEMinisteroView({
     roleKey?: keyof VitaEMinisteroParticipant['roles'],
     currentSelectedId?: string,
     filterGender?: 'M' | 'F',
-    requiredPartTypeIds?: string[]
+    requiredPartTypeIds?: string[],
+    onlyEligible = false
   ) => {
     const eligible = participants
       .filter(p => {
@@ -661,7 +663,7 @@ export function VitaEMinisteroView({
             ))}
           </optgroup>
         )}
-        {others.length > 0 && (
+        {!onlyEligible && others.length > 0 && (
           <optgroup label="Altri nominativi (non specificamente abilitati)">
             {others.map(p => (
               <option key={p.id} value={p.id}>
@@ -1260,7 +1262,7 @@ export function VitaEMinisteroView({
                                   }}
                                   className="inp text-xs py-1"
                                 >
-                                  {renderParticipantOptions('ministeroStudente', part.studentId, undefined, part.partTypeIds)}
+                                  {renderParticipantOptions('ministeroStudente', part.studentId, undefined, part.partTypeIds, !part.hasAssistant)}
                                 </select>
                               </div>
 
@@ -1273,9 +1275,23 @@ export function VitaEMinisteroView({
                                       disabled={!isAdmin}
                                       checked={part.hasAssistant}
                                       onChange={e => {
-                                        const updatedParts = [...meeting.ministeroParts];
-                                        updatedParts[pIdx].hasAssistant = e.target.checked;
-                                        if (!e.target.checked) updatedParts[pIdx].assistantId = '';
+                                        const hasAssistant = e.target.checked;
+                                        const partTypeIds = [
+                                          ...(part.partTypeIds || []).filter(id => id !== 'dimostrazione' && id !== 'discorso'),
+                                          hasAssistant ? 'dimostrazione' : 'discorso',
+                                        ];
+                                        const student = participants.find(p => p.id === part.studentId);
+                                        const studentId = !hasAssistant && student &&
+                                          (!student.roles.ministeroStudente || !isParticipantEligibleForPartTypes(student.roles, partTypeIds))
+                                          ? '' : part.studentId;
+                                        const updatedParts = meeting.ministeroParts.map((p, index) => index === pIdx ? {
+                                          ...p,
+                                          hasAssistant,
+                                          assistantId: hasAssistant ? p.assistantId : '',
+                                          studentId,
+                                          partTypeIds,
+                                          isSent: false,
+                                        } : p);
                                         handleUpdateSingleMeeting(meeting.id, { ministeroParts: updatedParts });
                                       }}
                                     />
