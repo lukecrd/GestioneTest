@@ -329,6 +329,14 @@ export interface MensileRow {
   warnings?: string[];
 }
 
+export interface DomenicaMonthProgram {
+  rows: DomenicaRow[] | null;
+  title: string;
+  warn: string | null;
+  month: number;
+  year: number;
+}
+
 export interface DomenicaRow {
   date: Date;
   special?: string;
