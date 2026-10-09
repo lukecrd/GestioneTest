@@ -277,6 +277,8 @@ export interface VitaEMinisteroMeeting {
   vitaCristianaParts: VitaCristianaPart[];
 
   // Studio Biblico di Congregazione
+  studioBiblicoType?: 'studio' | 'discorsoSorvegliante';
+  discorsoSorveglianteTitle?: string;
   studioBiblicoTitle?: string; // "Studio biblico di congregazione"
   studioBiblicoMinutes?: number; // 30
   studioBiblicoConductorId?: string;
