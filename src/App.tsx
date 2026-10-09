@@ -1,3 +1,4 @@
+import { createSchedulingLedger, weeklyDates } from './utils/automaticScheduling';
 import { personNameKey, duplicatePersonNames, syncRegistryLinks } from './utils/peopleRegistry';
 import { exportProgramExcel } from './utils/programExcel';
 import React, { useState, useEffect, useRef } from 'react';
@@ -626,6 +627,9 @@ export default function App() {
   const generateMensile = (y: number, m: number) => {
     if (!checkAdminPermission()) return;
     const sundays = sundayDates(y, m);
+    const ledger = createSchedulingLedger(state, { mensileRows: menRows, domenicaRows: domenicaProgramRows }, {
+      program: 'mensile', dates: sundays.flatMap(sunday => weeklyDates(sunday)),
+    });
     const uscieriPool = state.people.filter(p => p.roles.uscieri);
     const micPool = state.people.filter(p => p.roles.microfoni);
     const consolePool = state.people.filter(p => p.roles.console);
@@ -653,30 +657,28 @@ export default function App() {
         return;
       }
 
-      const unavailIds = state.people.filter(p => isUnavailable(p.id, sun, wed)).map(p => p.id);
+      const dates = weeklyDates(sun);
+      const unavailIds = state.people.filter(p => ledger.isUnavailable(p, dates) || ledger.isBusy(p, dates)).map(p => p.id);
 
       const chosenUsc: Person[] = [];
       for (let s = 0; s < 3; s++) {
-        const p = fairPick(uscieriPool, uc, ul, idx, [...unavailIds, ...chosenUsc.map(c => c.id)]);
-        if (p) { chosenUsc.push(p); markUsed(p, uc, ul, idx); }
+        const p = fairPick(uscieriPool.filter(p => !ledger.isBusy(p, dates)), uc, ul, idx, [...unavailIds, ...chosenUsc.map(c => c.id)]);
+        if (p) { chosenUsc.push(p); markUsed(p, uc, ul, idx); ledger.reserve(p, dates); }
       }
 
       // Microfonisti: prefer people not already assigned to Uscieri in the same week
       const usedInWeek = [...unavailIds, ...chosenUsc.map(c => c.id)];
       const chosenMic: Person[] = [];
       for (let s = 0; s < 2; s++) {
-        let p = fairPick(micPool, mc, ml, idx, [...usedInWeek, ...chosenMic.map(c => c.id)]);
-        if (!p) {
-          p = fairPick(micPool, mc, ml, idx, [...unavailIds, ...chosenMic.map(c => c.id)]);
-        }
-        if (p) { chosenMic.push(p); markUsed(p, mc, ml, idx); }
+        const p = fairPick(micPool.filter(p => !ledger.isBusy(p, dates)), mc, ml, idx, [...usedInWeek, ...chosenMic.map(c => c.id)]);
+        if (p) { chosenMic.push(p); markUsed(p, mc, ml, idx); ledger.reserve(p, dates); }
       }
 
       // Audio/Video: prefer people not already assigned to Uscieri or Microfonisti
       const assignedInWeekIds = [...usedInWeek, ...chosenMic.map(c => c.id)];
       let c1: Person | null = null, c2: Person | null = null;
 
-      const orderedPrimary = consolePool.filter(p => !assignedInWeekIds.includes(p.id)).sort((a, b) => {
+      const orderedPrimary = consolePool.filter(p => !assignedInWeekIds.includes(p.id) && !ledger.isBusy(p, dates)).sort((a, b) => {
         const ca = cc[a.id] || 0, cb = cc[b.id] || 0;
         if (ca !== cb) return ca - cb;
         return (cl[a.id] ?? -999) - (cl[b.id] ?? -999);
@@ -685,7 +687,7 @@ export default function App() {
       outerPrimary:
       for (let x = 0; x < orderedPrimary.length; x++) {
         for (let y = 0; y < orderedPrimary.length; y++) {
-          if (x === y) continue;
+          if (x === y || ledger.identity(orderedPrimary[x]) === ledger.identity(orderedPrimary[y])) continue;
           if (consolePairValid(orderedPrimary[x], orderedPrimary[y])) {
             c1 = orderedPrimary[x];
             c2 = orderedPrimary[y];
@@ -694,28 +696,16 @@ export default function App() {
         }
       }
 
-      if (!c1) {
-        const orderedFallback = consolePool.filter(p => !unavailIds.includes(p.id)).sort((a, b) => {
-          const ca = cc[a.id] || 0, cb = cc[b.id] || 0;
-          if (ca !== cb) return ca - cb;
-          return (cl[a.id] ?? -999) - (cl[b.id] ?? -999);
-        });
+      // A shortage leaves a role empty; do not reuse someone already assigned.
+      if (!c1 && orderedPrimary.length > 0) c1 = orderedPrimary[0];
+      if (c1) { markUsed(c1, cc, cl, idx); ledger.reserve(c1, dates); }
+      if (c2) { markUsed(c2, cc, cl, idx); ledger.reserve(c2, dates); }
 
-        outerFallback:
-        for (let x = 0; x < orderedFallback.length; x++) {
-          for (let y = 0; y < orderedFallback.length; y++) {
-            if (x === y) continue;
-            if (consolePairValid(orderedFallback[x], orderedFallback[y])) {
-              c1 = orderedFallback[x];
-              c2 = orderedFallback[y];
-              break outerFallback;
-            }
-          }
-        }
-      }
-
-      if (c1) markUsed(c1, cc, cl, idx);
-      if (c2) markUsed(c2, cc, cl, idx);
+      const missing = [];
+      if (chosenUsc.length < 3) missing.push(`${3 - chosenUsc.length} uscieri`);
+      if (chosenMic.length < 2) missing.push(`${2 - chosenMic.length} microfonisti`);
+      if (!c1 || !c2) missing.push(`${2 - Number(!!c1) - Number(!!c2)} audio/video`);
+      if (missing.length) warnings.push(`Settimana del ${fmtShort(sun)}: da assegnare ${missing.join(', ')}. Nessun nominativo idoneo libero.`);
 
       const riassetto = riassGroups[ri % riassGroups.length]; ri++;
       const pulizie = pulGroups[pi % pulGroups.length]; pi++;
@@ -1177,6 +1167,9 @@ try {
   const generateDomenica = (y: number, m: number) => {
     if (!checkAdminPermission()) return;
     const sundays = sundayDates(y, m);
+    const ledger = createSchedulingLedger(state, { mensileRows: menRows, domenicaRows: domenicaProgramRows }, {
+      program: 'domenica', dates: sundays.map(iso),
+    });
     const presPool = state.people.filter(p => p.roles.presidentePubblica);
     const lettPool = state.people.filter(p => p.roles.lettore);
     const pc: Record<string, number> = {}, pl: Record<string, number> = {};
@@ -1198,23 +1191,27 @@ try {
         rows.push({ date: sun, special: sample.titoloDiscorso, oratore: '', congregazione: '', titoloDiscorso: sample.titoloDiscorso, presidente: '', lettore: '' });
         return;
       }
-      const wed = addDays(sun, 3);
-      const unavailIds = state.people.filter(p => isUnavailable(p.id, sun, wed)).map(p => p.id);
+      const existing = domenicaProgramRows?.find(row => !row.placeholder && iso(row.date) === key);
+      const oratore = existing?.oratore ?? sample?.oratore ?? '';
+      if (oratore) ledger.reserve({ name: oratore }, key);
+      const unavailIds = state.people.filter(p => ledger.isUnavailable(p, key) || ledger.isBusy(p, key)).map(p => p.id);
       const used = [...unavailIds];
 
       const pres = fairPick(presPool, pc, pl, idx, used);
-      if (pres) { markUsed(pres, pc, pl, idx); used.push(pres.id); }
+      if (pres) { markUsed(pres, pc, pl, idx); used.push(pres.id); ledger.reserve(pres, key); }
 
-      const lett = fairPick(lettPool, lc, ll, idx, used);
-      if (lett) { markUsed(lett, lc, ll, idx); used.push(lett.id); }
+      const lett = fairPick(lettPool.filter(p => !ledger.isBusy(p, key)), lc, ll, idx, used);
+      if (lett) { markUsed(lett, lc, ll, idx); used.push(lett.id); ledger.reserve(lett, key); }
+      if (!pres) warnings.push(`${fmtDate(sun)}: presidente da assegnare, nessun nominativo idoneo libero.`);
+      if (!lett) warnings.push(`${fmtDate(sun)}: lettore da assegnare, nessun nominativo idoneo libero.`);
 
       const row: DomenicaRow = {
         date: sun,
-        oratore: sample?.oratore || '',
-        congregazione: sample?.congregazione || '',
-        titoloDiscorso: sample?.titoloDiscorso || '',
+        oratore,
+        congregazione: existing?.congregazione ?? sample?.congregazione ?? '',
+        titoloDiscorso: existing?.titoloDiscorso ?? sample?.titoloDiscorso ?? '',
         presidente: pres?.name || '—',
-        lettore: sample?.lettore || lett?.name || '—',
+        lettore: lett?.name || '—',
       };
 
       // Validation check for duplicates
@@ -2794,6 +2791,7 @@ try {
       {activeTab === 'vitaEMinistero' && (
         <VitaEMinisteroView
           state={state}
+          activePrograms={{ mensileRows: menRows, domenicaRows: domenicaProgramRows }}
           onSaveState={saveState}
           isAdmin={currentUser?.role === 'admin'}
           onShowToast={showToast}
@@ -2805,6 +2803,7 @@ try {
       {activeTab === 'servizioCampo' && (
         <ServizioCampoView
           state={state}
+          activePrograms={{ mensileRows: menRows, domenicaRows: domenicaProgramRows }}
           onSaveState={saveState}
           isAdmin={currentUser?.role === 'admin'}
           onShowToast={showToast}
@@ -2816,6 +2815,7 @@ try {
       {activeTab === 'operaPubblica' && (
         <OperaPubblicaView
           state={state}
+          activePrograms={{ mensileRows: menRows, domenicaRows: domenicaProgramRows }}
           onSaveState={saveState}
           isAdmin={currentUser?.role === 'admin'}
           onShowToast={showToast}
