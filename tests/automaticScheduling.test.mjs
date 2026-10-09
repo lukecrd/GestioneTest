@@ -247,3 +247,21 @@ test('public-work generation cannot reuse someone across shifts and excludes fie
   assert.equal(new Set(ids).size, ids.length);
   assert.equal(ids.length, 3);
 });
+
+test('ordinary Bible study and every VM role are assigned uniquely with eligible participants', () => {
+  const roleNames = ['presidente', 'preghiera', 'preghiera', 'tesoriDiscorso', 'tesoriGemme', 'tesoriLettura',
+    'ministeroStudente', 'ministeroAssistente', 'vitaCristianaParti', 'studioBiblicoConduttore', 'studioBiblicoLettore'];
+  const participants = roleNames.map((role, index) => participant('P' + index, { [role]: true }));
+  const original = meeting('m', '2026-10-07', {
+    studioBiblicoType: undefined, tesori1Title: 'Tesori',
+    ministeroParts: [{ id: 'mp', number: 4, title: 'Parte', minutes: 3, hasAssistant: true, studentId: '' }],
+    vitaCristianaParts: [{ id: 'vp', number: 5, title: 'Vita cristiana', minutes: 15, speakerId: '' }],
+  });
+  const result = generate(participants, [original]);
+  const ids = vitaAssignmentIds(result.meetings[0]);
+  assert.equal(ids.length, 11);
+  assert.equal(new Set(ids).size, 11);
+  assert.deepEqual(result.warnings, []);
+  assert.equal(result.meetings[0].studioBiblicoConductorId, 'P9');
+  assert.equal(result.meetings[0].studioBiblicoReaderId, 'P10');
+});
