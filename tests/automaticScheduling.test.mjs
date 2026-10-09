@@ -1,0 +1,249 @@
+import { readFileSync } from 'node:fs';
+import ts from 'typescript';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createSchedulingLedger, weeklyDates, generateVitaAssignments, vitaAssignmentIds, assignUniqueSlots } from '../src/utils/automaticScheduling.js';
+
+const person = (id, name = id) => ({ id, name, gender: 'M', spouseId: null, roles: {} });
+const participant = (id, roles = { tesoriLettura: true }, personId) => ({ id, name: id, gender: 'M', personId, roles });
+const meeting = (id, dateStr, patch = {}) => ({ id, dateStr, dateLabel: dateStr, bibleReading: '', ministeroParts: [], vitaCristianaParts: [], studioBiblicoType: 'discorsoSorvegliante', ...patch });
+const base = patch => ({ people: [], unavail: {}, special: {}, groups: { riassetto: '1', pulizie: '1' }, ...patch });
+const generate = (participants, meetings, patch = {}, programs = {}) =>
+  generateVitaAssignments(base(patch), { participants, meetings }, 2026, 9, programs);
+
+test('one identity across all five programmes and legacy names', () => {
+  const state = base({
+    people: [person('p', 'Luca')],
+    vitaEMinistero: { participants: [participant('vm', {}, 'p')], meetings: [meeting('v', '2026-10-09', { tesoriLetturaReaderId: 'vm' })] },
+    servizioCampo: { conductors: [{ id: 'f', personId: 'p', name: 'Old name' }], schedule: [{ dateStr: '2026-10-10', conductorId: 'f', isActive: true }] },
+    operaPubblica: { participants: [{ id: 'o', personId: 'p', name: 'Luca' }], schedule: [{ dateStr: '2026-10-13', turno1: ['o'], turno2: [] }] },
+  });
+  const ledger = createSchedulingLedger(state, {
+    mensileRows: [{ date: new Date('2026-10-04T12:00:00'), ingresso: [' Luca ', '—'] }],
+    domenicaRows: [{ date: new Date('2026-10-11T12:00:00'), lettore: 'LUCA' }],
+  });
+  for (const date of ['2026-10-04', '2026-10-07', '2026-10-09', '2026-10-10', '2026-10-11', '2026-10-13']) {
+    assert.ok(ledger.isBusy({ personId: 'p', name: 'Renamed' }, date), date);
+  }
+  assert.equal(ledger.isBusy({ name: 'Luca' }, '2026-10-12'), false);
+});
+
+test('regeneration excludes only target programme dates', () => {
+  const state = base({ people: [person('p', 'Luca')], operaPubblica: {
+    participants: [{ id: 'o', personId: 'p', name: 'Luca' }],
+    schedule: [{ dateStr: '2026-10-07', turno1: ['o'] }, { dateStr: '2026-11-04', turno1: ['o'] }],
+  }, servizioCampo: { conductors: [{ id: 'f', name: 'Luca' }], schedule: [{ dateStr: '2026-10-07', conductorId: 'f' }] } });
+  const ledger = createSchedulingLedger(state, {}, { program: 'operaPubblica', dates: ['2026-10-07'] });
+  assert.ok(ledger.isBusy({ name: 'Luca' }, '2026-10-07'));
+  assert.ok(ledger.isBusy({ name: 'Luca' }, '2026-11-04'));
+  const withoutField = createSchedulingLedger({ ...state, servizioCampo: undefined }, {}, { program: 'operaPubblica', dates: ['2026-10-07'] });
+  assert.equal(withoutField.isBusy({ name: 'Luca' }, '2026-10-07'), false);
+});
+
+test('inactive meetings, shifts, events and placeholder rows do not occupy a person', () => {
+  const state = base({
+    vitaEMinistero: { participants: [participant('p')], meetings: [meeting('e', '2026-10-04', { isSpecialEvent: true, tesoriLetturaReaderId: 'p' })] },
+    servizioCampo: { conductors: [{ id: 'f', name: 'p' }], schedule: [{ dateStr: '2026-10-04', conductorId: 'f', isActive: false }] },
+    operaPubblica: { participants: [{ id: 'o', name: 'p' }], schedule: [{ dateStr: '2026-10-04', turno1: ['o'], turno1Active: false }] },
+  });
+  const ledger = createSchedulingLedger(state, { domenicaRows: [{ date: '2026-10-04', presidente: 'p', placeholder: true }] });
+  assert.equal(ledger.isBusy({ name: 'p' }, '2026-10-04'), false);
+});
+
+test('latest archived monthly row wins and active row overrides it', () => {
+  const state = base({ mensileArchives: [
+    { savedAt: '2026-09-01', rows: [{ dateStr: '2026-10-04', auditorium: 'Old' }] },
+    { savedAt: '2026-09-02', rows: [{ dateStr: '2026-10-04', auditorium: 'New' }] },
+  ] });
+  let ledger = createSchedulingLedger(state);
+  assert.ok(ledger.isBusy({ name: 'New' }, '2026-10-07'));
+  assert.equal(ledger.isBusy({ name: 'Old' }, '2026-10-07'), false);
+  ledger = createSchedulingLedger(state, { mensileRows: [{ date: '2026-10-04', auditorium: 'Active' }] });
+  assert.ok(ledger.isBusy({ name: 'Active' }, '2026-10-07'));
+  assert.equal(ledger.isBusy({ name: 'New' }, '2026-10-07'), false);
+});
+
+test('weekly dates include Wednesday across month boundaries', () => {
+  assert.deepEqual(weeklyDates('2026-05-31'), ['2026-05-31', '2026-06-03']);
+});
+
+test('unavailability resolves both personId and legacy name', () => {
+  const ledger = createSchedulingLedger(base({ people: [person('p', 'Luca')], unavail: { p: ['2026-10-07'] } }));
+  assert.ok(ledger.isUnavailable({ name: ' LUCA ' }, '2026-10-07'));
+  assert.ok(ledger.isUnavailable({ personId: 'p', name: 'Old' }, '2026-10-07'));
+  assert.equal(ledger.isUnavailable({ name: 'Luca' }, '2026-10-08'), false);
+});
+
+test('never assigned first, oldest assignment next, future history ignored; chronological month rotation', () => {
+  const p = ['A', 'B', 'C'].map(id => participant(id));
+  const oldA = meeting('old-a', '2026-09-01', { tesoriLetturaReaderId: 'A' });
+  const oldB = meeting('old-b', '2026-09-20', { tesoriLetturaReaderId: 'B' });
+  const futureC = meeting('future', '2026-11-01', { tesoriLetturaReaderId: 'C' });
+  const targets = [meeting('t3', '2026-10-21'), meeting('t1', '2026-10-07'), meeting('t2', '2026-10-14')];
+  const result = generate(p, [oldA, oldB, futureC, ...targets]);
+  assert.equal(result.meetings.find(m => m.id === 't1').tesoriLetturaReaderId, 'C');
+  assert.equal(result.meetings.find(m => m.id === 't2').tesoriLetturaReaderId, 'A');
+  assert.equal(result.meetings.find(m => m.id === 't3').tesoriLetturaReaderId, 'B');
+  assert.deepEqual(result.meetings.slice(0, 3), [oldA, oldB, futureC]);
+});
+
+test('same-day conflicts across programmes and calendar availability exclude the oldest candidates', () => {
+  const p = ['A', 'B', 'C'].map(id => participant(id, { tesoriLettura: true }, id));
+  const state = {
+    people: ['A', 'B', 'C'].map(id => person(id)),
+    unavail: { B: ['2026-10-07'] },
+    operaPubblica: { participants: [{ id: 'o', personId: 'A', name: 'A' }], schedule: [{ dateStr: '2026-10-07', turno1: ['o'] }] },
+  };
+  const result = generate(p, [meeting('t', '2026-10-07')], state);
+  assert.equal(result.meetings[0].tesoriLetturaReaderId, 'C');
+});
+
+test('VM does not duplicate a person across roles or duplicate linked profiles', () => {
+  const roles = { tesoriLettura: true, presidente: true, preghiera: true };
+  const p = [participant('first', roles, 'p'), participant('duplicate', roles, 'p')];
+  const result = generate(p, [meeting('m', '2026-10-07')], { people: [person('p', 'Same')] });
+  assert.equal(vitaAssignmentIds(result.meetings[0]).length, 1);
+  assert.ok(result.warnings.length > 0);
+});
+
+test('shortages clear previous assignments and reset sent slips rather than reusing someone', () => {
+  const result = generate([], [meeting('m', '2026-10-07', {
+    tesoriLetturaReaderId: 'old', tesoriLetturaSent: true,
+    ministeroParts: [{ id: 'mp', number: 4, title: 'Parte', minutes: 3, hasAssistant: true, studentId: 'old', assistantId: 'old', isSent: true }],
+  })]);
+  assert.equal(result.meetings[0].tesoriLetturaReaderId, '');
+  assert.equal(result.meetings[0].tesoriLetturaSent, false);
+  assert.equal(result.meetings[0].ministeroParts[0].studentId, '');
+  assert.equal(result.meetings[0].ministeroParts[0].assistantId, '');
+  assert.equal(result.meetings[0].ministeroParts[0].isSent, false);
+});
+
+test('eligibility uses ministero types and gender for Bible reading', () => {
+  const p = [
+    { ...participant('female', { tesoriLettura: true }), gender: 'F' },
+    participant('wrong', { ministeroStudente: true, ministeroTipiAbilitati: ['lunga', 'discorso'] }),
+    participant('right', { ministeroStudente: true, ministeroTipiAbilitati: ['breve', 'dimostrazione'] }),
+  ];
+  const result = generate(p, [meeting('m', '2026-10-07', { ministeroParts: [
+    { id: 'mp', number: 4, title: 'Parte', minutes: 3, hasAssistant: true, studentId: '' },
+  ] })]);
+  assert.equal(result.meetings[0].tesoriLetturaReaderId, '');
+  assert.equal(result.meetings[0].ministeroParts[0].studentId, 'right');
+});
+
+test('overseer talk preserves title and dormant Bible-study selections without occupying them', () => {
+  const original = meeting('m', '2026-10-07', {
+    discorsoSorveglianteTitle: 'Titolo', studioBiblicoConductorId: 'A', studioBiblicoReaderId: 'B',
+  });
+  const result = generate([participant('A'), participant('B')], [original]);
+  assert.equal(result.meetings[0].discorsoSorveglianteTitle, 'Titolo');
+  assert.equal(result.meetings[0].studioBiblicoConductorId, 'A');
+  assert.equal(result.meetings[0].studioBiblicoReaderId, 'B');
+  assert.equal(result.meetings[0].tesoriLetturaReaderId, 'A');
+  assert.deepEqual(vitaAssignmentIds(result.meetings[0]), ['A']);
+  assert.equal(original.tesoriLetturaReaderId, undefined);
+});
+
+test('two ordinary VM meetings on the same day cannot reuse a person', () => {
+  const result = generate([participant('A'), participant('B')], [meeting('one', '2026-10-07'), meeting('two', '2026-10-07')]);
+  assert.equal(result.meetings[0].tesoriLetturaReaderId, 'A');
+  assert.equal(result.meetings[1].tesoriLetturaReaderId, 'B');
+});
+
+test('slot matching fills scarce roles without unnecessary empty slots', () => {
+  const a = { id: 'a' }, b = { id: 'b' }, c = { id: 'c' };
+  const result = assignUniqueSlots([
+    { id: 'one', candidates: [a, b] },
+    { id: 'two', candidates: [a, c] },
+    { id: 'three', candidates: [a, c] },
+  ], p => p.id);
+  assert.equal(result.size, 3);
+  assert.equal(new Set([...result.values()].map(p => p.id)).size, 3);
+});
+
+function invokeGenerator(path, name, context) {
+  const source = readFileSync(new URL('../' + path, import.meta.url), 'utf8');
+  const start = source.indexOf('  const ' + name + ' =');
+  const end = source.indexOf('\n  };', start) + '\n  };'.length;
+  assert.ok(start >= 0 && end > start, name + ' function found');
+  const compiled = ts.transpileModule(source.slice(start, end), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
+  }).outputText;
+  const fn = new Function(...Object.keys(context), compiled + '; return ' + name + ';')(...Object.values(context));
+  fn(...(context.args || []));
+}
+const noop = () => {};
+const iso = date => date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
+const addDays = (date, count) => { const result = new Date(date); result.setDate(result.getDate() + count); return result; };
+
+test('monthly generator leaves gaps instead of assigning duplicate roles or a person busy on Wednesday', () => {
+  const people = ['A', 'B', 'C', 'D'].map(id => ({ ...person(id), roles: { uscieri: true, microfoni: true, console: true } }));
+  const state = base({ people, vitaEMinistero: { participants: [participant('vm', {}, 'A')], meetings: [meeting('v', '2026-10-07', { tesoriLetturaReaderId: 'vm' })] } });
+  let rows;
+  invokeGenerator('src/App.tsx', 'generateMensile', {
+    args: [2026, 9], state, menRows: null, domenicaProgramRows: null, checkAdminPermission: () => true,
+    sundayDates: () => [new Date('2026-10-04T12:00:00')], iso, addDays, weeklyDates, createSchedulingLedger,
+    fairPick: (pool, counts, last, index, exclude) => pool.find(p => !exclude.includes(p.id)),
+    markUsed: noop, consolePairValid: () => true, MESI: Array(12).fill('Mese'), fmtShort: iso,
+    setMenTitle: noop, setMenRows: value => { rows = value; }, setMenWarn: noop, setActiveArchiveId: noop, syncActivePrograms: noop,
+  });
+  const assigned = [...rows[0].ingresso, rows[0].auditorium, ...rows[0].microfoni, ...rows[0].audioVideo].filter(n => n !== '—');
+  assert.equal(assigned.includes('A'), false);
+  assert.equal(new Set(assigned).size, assigned.length);
+  assert.equal(assigned.length, 3);
+});
+
+test('Sunday generation respects existing monthly roles and removes the fixed sample reader override', () => {
+  const state = base({ people: ['A', 'B'].map(id => ({ ...person(id), roles: { presidentePubblica: true, lettore: true } })) });
+  let rows;
+  invokeGenerator('src/App.tsx', 'generateDomenica', {
+    args: [2026, 9], state, menRows: [{ date: new Date('2026-10-11T12:00:00'), auditorium: 'A' }], domenicaProgramRows: null,
+    checkAdminPermission: () => true, sundayDates: () => [new Date('2026-10-11T12:00:00')],
+    iso, addDays, createSchedulingLedger, OCTOBRE_2026_WEEKEND: { '2026-10-11': { lettore: 'A' } },
+    fairPick: (pool, counts, last, index, exclude) => pool.find(p => !exclude.includes(p.id)),
+    markUsed: noop, MESI: Array(12).fill('Mese'), fmtDate: iso,
+    setDomTitle: noop, setDomRows: value => { rows = value; }, setDomWarn: noop, syncActivePrograms: noop,
+  });
+  assert.equal(rows[0].presidente, 'B');
+  assert.equal(rows[0].lettore, '—');
+});
+
+test('field service generator clears a conflicting old conductor and cannot reuse the first choice in a second meeting', () => {
+  const conductors = ['A', 'B'].map(id => ({ id: 'f-' + id, name: id, personId: id, availability: {} }));
+  const currentMonthSchedule = [
+    { dateStr: '2026-10-07', slotKey: 'speciale', time: '09:00', conductorId: 'f-A', isActive: true },
+    { dateStr: '2026-10-07', slotKey: 'speciale', time: '15:00', conductorId: 'f-A', isActive: true },
+  ];
+  const data = { conductors, schedule: currentMonthSchedule, locations: ['Sala'] };
+  const state = base({ people: ['A', 'B'].map(id => person(id)), servizioCampo: data,
+    vitaEMinistero: { participants: [participant('vm', {}, 'A')], meetings: [meeting('v', '2026-10-07', { tesoriLetturaReaderId: 'vm' })] } });
+  let saved;
+  invokeGenerator('src/components/ServizioCampoView.tsx', 'handleAutoGenerate', {
+    state, activePrograms: {}, data, conductors, schedule: data.schedule, currentMonthSchedule,
+    selectedYear: 2026, selectedMonth: 9, checkAdminPermission: () => true, createSchedulingLedger,
+    onShowToast: noop, setActiveSubTab: noop, setGenerationWarnings: noop, defaultSettings: {},
+    DEFAULT_SLOT_SETTINGS: { speciale: { time: '09:00', defaultLocation: 'Sala' } }, rotationLocations: ['Sala'],
+    saveServizioData: value => { saved = value; },
+  });
+  assert.equal(saved.schedule[0].conductorId, 'f-B');
+  assert.equal(saved.schedule[1].conductorId, null);
+});
+
+test('public-work generation cannot reuse someone across shifts and excludes field-service conductors', () => {
+  const participants = ['A', 'B', 'C', 'D'].map(id => ({ id: 'o-' + id, name: id, personId: id, gender: 'M',
+    availability: { ribollaMartedi: { turno1: true, turno2: true } } }));
+  const operaData = { participants, schedule: [] };
+  const state = base({ people: ['A', 'B', 'C', 'D'].map(id => person(id)), operaPubblica: operaData,
+    servizioCampo: { conductors: [{ id: 'f', personId: 'A', name: 'A' }], schedule: [{ dateStr: '2026-10-06', conductorId: 'f', isActive: true }] } });
+  let saved;
+  invokeGenerator('src/components/OperaPubblicaView.tsx', 'handleAutoGenerateSchedule', {
+    state, activePrograms: {}, operaData, participants, schedule: [], selectedYear: 2026, selectedMonth: 9,
+    daysInMonthList: [{ dateStr: '2026-10-06', dayOfWeek: 'martedi', location: 'Mercato di Ribolla' }],
+    checkAdminPermission: () => true, createSchedulingLedger, onShowToast: noop, setGenerationWarnings: noop,
+    getParticipantGender: p => p.gender, updateOperaData: value => { saved = value; },
+  });
+  const ids = [...saved.schedule[0].turno1, ...saved.schedule[0].turno2];
+  assert.equal(ids.includes('o-A'), false);
+  assert.equal(new Set(ids).size, ids.length);
+  assert.equal(ids.length, 3);
+});
