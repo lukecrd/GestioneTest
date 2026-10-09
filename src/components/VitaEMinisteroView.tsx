@@ -285,6 +285,8 @@ export function VitaEMinisteroView({
             tesoriLetturaRoom: existing.tesoriLetturaRoom || 'main',
             ministeroParts: mergedMinisteroParts,
             vitaCristianaParts: mergedVitaParts,
+            studioBiblicoType: existing.studioBiblicoType,
+            discorsoSorveglianteTitle: existing.discorsoSorveglianteTitle,
             studioBiblicoConductorId: existing.studioBiblicoConductorId || '',
             studioBiblicoReaderId: existing.studioBiblicoReaderId || '',
             preghieraFinaleId: existing.preghieraFinaleId || '',
@@ -1531,8 +1533,35 @@ export function VitaEMinisteroView({
                           </div>
                         ))}
 
-                        {/* Studio Biblico di Congregazione */}
+                        {/* Studio biblico o discorso del sorvegliante */}
                         <div className="p-2.5 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="sm:col-span-2">
+                            <label className="lbl block mb-1" htmlFor={`studio-type-${meeting.id}`}>Parte conclusiva di Vita cristiana</label>
+                            <select
+                              id={`studio-type-${meeting.id}`}
+                              disabled={!isAdmin}
+                              value={meeting.studioBiblicoType || 'studio'}
+                              onChange={e => handleUpdateSingleMeeting(meeting.id, { studioBiblicoType: e.target.value as 'studio' | 'discorsoSorvegliante' })}
+                              className="inp text-xs py-1"
+                            >
+                              <option value="studio">Studio biblico di congregazione</option>
+                              <option value="discorsoSorvegliante">Discorso del sorvegliante</option>
+                            </select>
+                          </div>
+                          {meeting.studioBiblicoType === 'discorsoSorvegliante' ? (
+                            <div className="sm:col-span-2">
+                              <label className="lbl block mb-1" htmlFor={`discorso-title-${meeting.id}`}>Titolo del discorso del sorvegliante</label>
+                              <input
+                                id={`discorso-title-${meeting.id}`}
+                                type="text"
+                                disabled={!isAdmin}
+                                value={meeting.discorsoSorveglianteTitle || ''}
+                                onChange={e => handleUpdateSingleMeeting(meeting.id, { discorsoSorveglianteTitle: e.target.value })}
+                                placeholder="Inserisci il titolo del discorso"
+                                className="inp text-xs py-1"
+                              />
+                            </div>
+                          ) : (<>
                           <div>
                             <label className="lbl block mb-1">
                               Studio Biblico di Congregazione (30 min) - Conduttore (M)
@@ -1560,6 +1589,7 @@ export function VitaEMinisteroView({
                               {renderParticipantOptions('studioBiblicoLettore', meeting.studioBiblicoReaderId, 'M')}
                             </select>
                           </div>
+                          </>)}
                         </div>
 
                         {/* Cantico Finale e Preghiera Finale */}
