@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test:scheduling": "node --import tsx --test tests/automaticScheduling.test.mjs"
+    "test:scheduling": "node --import tsx --test tests/automaticScheduling.test.mjs tests/domenicaPrograms.test.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
