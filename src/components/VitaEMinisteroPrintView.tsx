@@ -157,11 +157,15 @@ try {
       m.vitaCristianaParts.forEach(vp => {
         rows.push([`${vp.number}. ${vp.title} (${vp.minutes} min)`, getParticipantName(vp.speakerId)]);
       });
+      const isOverseerTalk = m.studioBiblicoType === 'discorsoSorvegliante';
+      const finalPartTitle = isOverseerTalk
+        ? `Discorso del sorvegliante${m.discorsoSorveglianteTitle?.trim() ? `: ${m.discorsoSorveglianteTitle.trim()}` : ''}`
+        : m.studioBiblicoTitle || 'Studio biblico di congregazione';
       const cbsConductor = getParticipantName(m.studioBiblicoConductorId);
       const cbsReader = getParticipantName(m.studioBiblicoReaderId);
       rows.push([
-        `${m.studioBiblicoTitle || 'Studio biblico di congregazione'} (${m.studioBiblicoMinutes || 30} min)`,
-        `${cbsConductor}${cbsReader ? ` / ${cbsReader}` : ''}`,
+        `${finalPartTitle} (${m.studioBiblicoMinutes || 30} min)`,
+        isOverseerTalk ? 'Sorvegliante di circoscrizione' : `${cbsConductor}${cbsReader ? ` / ${cbsReader}` : ''}`,
       ]);
       rows.push(['Cantico finale:', m.canticoFinale || '', 'Preghiera finale:', getParticipantName(m.preghieraFinaleId)]);
       rows.push([]);

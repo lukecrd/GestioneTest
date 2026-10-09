@@ -1,3 +1,4 @@
+import { createSchedulingLedger } from '../utils/automaticScheduling';
 import { exportProgramExcel } from '../utils/programExcel';
 import React, { useState, useMemo } from 'react';
 import * as XLSX from 'xlsx';
@@ -42,6 +43,7 @@ import {
   Lock as LockIcon,
 } from 'lucide-react';
 import {
+  SchedulingPrograms,
   StateData,
   OperaPubblicaData,
   OperaPubblicaParticipant,
@@ -53,6 +55,7 @@ import {
 
 interface OperaPubblicaViewProps {
   state: StateData;
+  activePrograms?: SchedulingPrograms;
   onSaveState: (newState: StateData) => void;
   isAdmin: boolean;
   onShowToast: (msg: string) => void;
@@ -98,11 +101,13 @@ function getTuesdaysAndWednesdays(year: number, month: number) {
 
 export const OperaPubblicaView: React.FC<OperaPubblicaViewProps> = ({
   state,
+  activePrograms,
   onSaveState,
   isAdmin,
   onShowToast,
   checkAdminPermission,
 }) => {
+  const [generationWarnings, setGenerationWarnings] = useState<string[]>([]);
   const [activeSubTab, setActiveSubTab] = useState<'partecipanti' | 'programma' | 'sondaggio' | 'statistiche' | 'stampa'>('programma');
 
   // Month & Year state for schedule
@@ -634,6 +639,11 @@ export const OperaPubblicaView: React.FC<OperaPubblicaViewProps> = ({
       return;
     }
 
+    const ledger = createSchedulingLedger(state, activePrograms, {
+      program: 'operaPubblica', dates: daysInMonthList.map(day => day.dateStr),
+    });
+    const warnings: string[] = [];
+
     // Keep track of total assignments per participant in this generation pass for fairness
     const assignmentCounts: Record<string, number> = {};
     participants.forEach(p => {
@@ -647,8 +657,8 @@ export const OperaPubblicaView: React.FC<OperaPubblicaViewProps> = ({
       const locKey = isMartedi ? 'ribollaMartedi' : 'roccastradaMercoledi';
 
       const existingAssignment = schedule.find(s => s.dateStr === dateStr);
-      const t1Active = existingAssignment ? (existingAssignment.turno1Active !== false) : true;
-      const t2Active = existingAssignment ? (existingAssignment.turno2Active !== false) : true;
+      const t1Active = existingAssignment ? (existingAssignment.turno1Active !== false) : operaData.defaultShifts?.[locKey]?.turno1 !== false;
+      const t2Active = existingAssignment ? (existingAssignment.turno2Active !== false) : operaData.defaultShifts?.[locKey]?.turno2 !== false;
 
       // Helper function to pick a same-gender pair (2 women or 2 men) for a shift
       const generateSameGenderShift = (
@@ -658,12 +668,15 @@ export const OperaPubblicaView: React.FC<OperaPubblicaViewProps> = ({
         // Filter available participants for this location & shift who are not marked unavailable
         const avail = participants.filter(p => {
           if (!p.availability[locKey]?.[shiftKey]) return false;
+          if (ledger.isBusy(p, dateStr) || ledger.isUnavailable(p, dateStr)) return false;
           if (p.personId && state.unavail[p.personId]?.includes(dateStr)) return false;
           return true;
         });
 
-        const availMen = avail.filter(p => getParticipantGender(p, state.people) === 'M');
-        const availWomen = avail.filter(p => getParticipantGender(p, state.people) === 'F');
+        const uniqueAvailable = avail.filter((person, index) =>
+          avail.findIndex(other => ledger.identity(other) === ledger.identity(person)) === index);
+        const availMen = uniqueAvailable.filter(p => getParticipantGender(p, state.people) === 'M');
+        const availWomen = uniqueAvailable.filter(p => getParticipantGender(p, state.people) === 'F');
 
         const getScore = (p: OperaPubblicaParticipant) => {
           const penalty = alreadyChosenInOtherShift.includes(p.id) ? 10 : 0;
@@ -720,7 +733,9 @@ export const OperaPubblicaView: React.FC<OperaPubblicaViewProps> = ({
         chosenT1 = generateSameGenderShift('turno1', []);
         chosenT1.forEach(id => {
           assignmentCounts[id] = (assignmentCounts[id] || 0) + 1;
+          ledger.reserve(participants.find(p => p.id === id), dateStr);
         });
+        if (chosenT1.length < 2) warnings.push(`${dateStr} turno 1: ${2 - chosenT1.length} posti da assegnare.`);
       }
 
       let chosenT2: string[] = [];
@@ -728,10 +743,13 @@ export const OperaPubblicaView: React.FC<OperaPubblicaViewProps> = ({
         chosenT2 = generateSameGenderShift('turno2', chosenT1);
         chosenT2.forEach(id => {
           assignmentCounts[id] = (assignmentCounts[id] || 0) + 1;
+          ledger.reserve(participants.find(p => p.id === id), dateStr);
         });
+        if (chosenT2.length < 2) warnings.push(`${dateStr} turno 2: ${2 - chosenT2.length} posti da assegnare.`);
       }
 
       newAssignments.push({
+        ...existingAssignment,
         dateStr,
         dayOfWeek,
         location,
@@ -753,7 +771,8 @@ export const OperaPubblicaView: React.FC<OperaPubblicaViewProps> = ({
       schedule: [...filteredSchedule, ...newAssignments],
     });
 
-    onShowToast(`Programma "Opera Pubblica" per ${MESI[selectedMonth]} ${selectedYear} generato con coppie dello stesso genere!`);
+    setGenerationWarnings(warnings);
+    onShowToast(warnings.length ? `Programma generato con ${warnings.length} turni incompleti da verificare.` : 'Programma generato con coppie dello stesso genere, senza sovrapposizioni nella stessa data.');
   };
 
   // Toggle/Assign participant manually to a specific shift on a specific date
@@ -1376,6 +1395,12 @@ try {
       </div>
 
       {/* --- SUBTAB 1: PROGRAMMAZIONE TURNI --- */}
+      {activeSubTab === 'programma' && generationWarnings.length > 0 && (
+        <div className="card no-print border-amber-300 bg-amber-50 dark:bg-amber-950/30 text-xs" role="status">
+          <p className="font-bold mb-2">Incarichi da completare</p>
+          <ul className="list-disc pl-4 space-y-1">{generationWarnings.map((warning, i) => <li key={i}>{warning}</li>)}</ul>
+        </div>
+      )}
       {activeSubTab === 'programma' && (
         <div className="space-y-6">
           {/* Controls Bar */}

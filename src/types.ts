@@ -277,6 +277,8 @@ export interface VitaEMinisteroMeeting {
   vitaCristianaParts: VitaCristianaPart[];
 
   // Studio Biblico di Congregazione
+  studioBiblicoType?: 'studio' | 'discorsoSorvegliante';
+  discorsoSorveglianteTitle?: string;
   studioBiblicoTitle?: string; // "Studio biblico di congregazione"
   studioBiblicoMinutes?: number; // 30
   studioBiblicoConductorId?: string;
@@ -327,6 +329,14 @@ export interface MensileRow {
   warnings?: string[];
 }
 
+export interface DomenicaMonthProgram {
+  rows: DomenicaRow[] | null;
+  title: string;
+  warn: string | null;
+  month: number;
+  year: number;
+}
+
 export interface DomenicaRow {
   date: Date;
   special?: string;
@@ -341,6 +351,12 @@ export interface DomenicaRow {
 }
 
 export type ChecklistProgramKey = 'mensile' | 'domenica' | 'vitaEMinistero' | 'servizioCampo' | 'operaPubblica';
+
+/** Active weekly and Sunday programmes, shared with every automatic generator. */
+export interface SchedulingPrograms {
+  mensileRows?: MensileRow[] | null;
+  domenicaRows?: DomenicaRow[] | null;
+}
 
 export interface ProgramResponsible {
   name: string;

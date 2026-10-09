@@ -1,6 +1,8 @@
+import { generateVitaAssignments } from '../utils/automaticScheduling';
 import { fetchWolJson } from '../utils/wolApi';
 import React, { useState } from 'react';
 import {
+  SchedulingPrograms,
   StateData,
   VitaEMinisteroData,
   VitaEMinisteroMeeting,
@@ -59,6 +61,7 @@ import {
 
 interface VitaEMinisteroViewProps {
   state: StateData;
+  activePrograms?: SchedulingPrograms;
   onSaveState: (newState: StateData) => void;
   isAdmin: boolean;
   onShowToast: (msg: string) => void;
@@ -72,6 +75,7 @@ const MESI_FULL = [
 
 export function VitaEMinisteroView({
   state,
+  activePrograms,
   onSaveState,
   isAdmin,
   onShowToast,
@@ -79,6 +83,8 @@ export function VitaEMinisteroView({
 }: VitaEMinisteroViewProps) {
   // Current active sub-tab
   const [activeSubTab, setActiveSubTab] = useState<'programma' | 'nominativi' | 'statistiche' | 'stampa'>('programma');
+
+  const [generationWarnings, setGenerationWarnings] = useState<string[]>([]);
 
   // WOL sync modal state
   const [isWolModalOpen, setIsWolModalOpen] = useState<boolean>(false);
@@ -204,6 +210,20 @@ export function VitaEMinisteroView({
     return true;
   });
 
+  const handleAutoGenerate = () => {
+    if (!checkAdminPermission()) return;
+    const result = generateVitaAssignments(state, vmData, selectedYear, selectedMonth, activePrograms);
+    setGenerationWarnings(result.warnings);
+    if (!result.generatedCount) {
+      onShowToast('Nessuna adunanza ordinaria da generare nel mese selezionato. Scarica prima il programma da WOL.');
+      return;
+    }
+    handleUpdateMeetings(result.meetings);
+    onShowToast(result.warnings.length
+      ? `Generazione completata: ${result.warnings.length} segnalazioni da verificare.`
+      : 'Nominativi assegnati in ordine di ultima assegnazione, senza sovrapposizioni nella stessa data.');
+  };
+
   const handlePrevMonth = () => {
     if (selectedMonth === 0) {
       setSelectedMonth(11);
@@ -253,8 +273,9 @@ export function VitaEMinisteroView({
             const ep = existing.ministeroParts.find(p => p.number === wp.number) || existing.ministeroParts[idx];
             return {
               ...wp,
+              hasAssistant: ep?.hasAssistant ?? wp.hasAssistant,
               studentId: ep?.studentId || '',
-              assistantId: ep?.assistantId || '',
+              assistantId: (ep?.hasAssistant ?? wp.hasAssistant) ? ep?.assistantId || '' : '',
               isSent: ep?.isSent || false,
               room: ep?.room || 'main',
               // Mantiene i tipi di parte già impostati manualmente in precedenza,
@@ -285,6 +306,8 @@ export function VitaEMinisteroView({
             tesoriLetturaRoom: existing.tesoriLetturaRoom || 'main',
             ministeroParts: mergedMinisteroParts,
             vitaCristianaParts: mergedVitaParts,
+            studioBiblicoType: existing.studioBiblicoType,
+            discorsoSorveglianteTitle: existing.discorsoSorveglianteTitle,
             studioBiblicoConductorId: existing.studioBiblicoConductorId || '',
             studioBiblicoReaderId: existing.studioBiblicoReaderId || '',
             preghieraFinaleId: existing.preghieraFinaleId || '',
@@ -603,7 +626,8 @@ export function VitaEMinisteroView({
     roleKey?: keyof VitaEMinisteroParticipant['roles'],
     currentSelectedId?: string,
     filterGender?: 'M' | 'F',
-    requiredPartTypeIds?: string[]
+    requiredPartTypeIds?: string[],
+    onlyEligible = false
   ) => {
     const eligible = participants
       .filter(p => {
@@ -639,7 +663,7 @@ export function VitaEMinisteroView({
             ))}
           </optgroup>
         )}
-        {others.length > 0 && (
+        {!onlyEligible && others.length > 0 && (
           <optgroup label="Altri nominativi (non specificamente abilitati)">
             {others.map(p => (
               <option key={p.id} value={p.id}>
@@ -779,6 +803,15 @@ export function VitaEMinisteroView({
               {isAdmin && (
                 <>
                   <button
+                    onClick={handleAutoGenerate}
+                    disabled={isQuickSyncing || meetingsInMonth.length === 0}
+                    title="Rigenera i nominativi del mese: priorità a chi non ha incarichi da più tempo, rispettando abilitazioni, indisponibilità e altri programmi."
+                    className="px-3 py-1.5 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg flex items-center gap-1.5"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    Genera automaticamente
+                  </button>
+                  <button
                     onClick={() => setIsWolModalOpen(true)}
                     className="px-3 py-1.5 text-xs font-bold bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 border border-indigo-300 dark:border-indigo-800 rounded-lg flex items-center gap-1.5 shadow-xs transition-colors"
                   >
@@ -797,6 +830,13 @@ export function VitaEMinisteroView({
               )}
             </div>
           </div>
+
+          {generationWarnings.length > 0 && (
+            <div className="card no-print border-amber-300 bg-amber-50 dark:bg-amber-950/30 text-xs" role="status">
+              <p className="font-bold mb-2">Incarichi da verificare</p>
+              <ul className="list-disc pl-4 space-y-1">{generationWarnings.map((warning, i) => <li key={i}>{warning}</li>)}</ul>
+            </div>
+          )}
 
           {/* List of Meetings in this month */}
           {meetingsInMonth.length === 0 ? (
@@ -1222,7 +1262,7 @@ export function VitaEMinisteroView({
                                   }}
                                   className="inp text-xs py-1"
                                 >
-                                  {renderParticipantOptions('ministeroStudente', part.studentId, undefined, part.partTypeIds)}
+                                  {renderParticipantOptions('ministeroStudente', part.studentId, undefined, part.partTypeIds, !part.hasAssistant)}
                                 </select>
                               </div>
 
@@ -1235,9 +1275,23 @@ export function VitaEMinisteroView({
                                       disabled={!isAdmin}
                                       checked={part.hasAssistant}
                                       onChange={e => {
-                                        const updatedParts = [...meeting.ministeroParts];
-                                        updatedParts[pIdx].hasAssistant = e.target.checked;
-                                        if (!e.target.checked) updatedParts[pIdx].assistantId = '';
+                                        const hasAssistant = e.target.checked;
+                                        const partTypeIds = [
+                                          ...(part.partTypeIds || []).filter(id => id !== 'dimostrazione' && id !== 'discorso'),
+                                          hasAssistant ? 'dimostrazione' : 'discorso',
+                                        ];
+                                        const student = participants.find(p => p.id === part.studentId);
+                                        const studentId = !hasAssistant && student &&
+                                          (!student.roles.ministeroStudente || !isParticipantEligibleForPartTypes(student.roles, partTypeIds))
+                                          ? '' : part.studentId;
+                                        const updatedParts = meeting.ministeroParts.map((p, index) => index === pIdx ? {
+                                          ...p,
+                                          hasAssistant,
+                                          assistantId: hasAssistant ? p.assistantId : '',
+                                          studentId,
+                                          partTypeIds,
+                                          isSent: false,
+                                        } : p);
                                         handleUpdateSingleMeeting(meeting.id, { ministeroParts: updatedParts });
                                       }}
                                     />
@@ -1531,8 +1585,35 @@ export function VitaEMinisteroView({
                           </div>
                         ))}
 
-                        {/* Studio Biblico di Congregazione */}
+                        {/* Studio biblico o discorso del sorvegliante */}
                         <div className="p-2.5 bg-white dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="sm:col-span-2">
+                            <label className="lbl block mb-1" htmlFor={`studio-type-${meeting.id}`}>Parte conclusiva di Vita cristiana</label>
+                            <select
+                              id={`studio-type-${meeting.id}`}
+                              disabled={!isAdmin}
+                              value={meeting.studioBiblicoType || 'studio'}
+                              onChange={e => handleUpdateSingleMeeting(meeting.id, { studioBiblicoType: e.target.value as 'studio' | 'discorsoSorvegliante' })}
+                              className="inp text-xs py-1"
+                            >
+                              <option value="studio">Studio biblico di congregazione</option>
+                              <option value="discorsoSorvegliante">Discorso del sorvegliante</option>
+                            </select>
+                          </div>
+                          {meeting.studioBiblicoType === 'discorsoSorvegliante' ? (
+                            <div className="sm:col-span-2">
+                              <label className="lbl block mb-1" htmlFor={`discorso-title-${meeting.id}`}>Titolo del discorso del sorvegliante</label>
+                              <input
+                                id={`discorso-title-${meeting.id}`}
+                                type="text"
+                                disabled={!isAdmin}
+                                value={meeting.discorsoSorveglianteTitle || ''}
+                                onChange={e => handleUpdateSingleMeeting(meeting.id, { discorsoSorveglianteTitle: e.target.value })}
+                                placeholder="Inserisci il titolo del discorso"
+                                className="inp text-xs py-1"
+                              />
+                            </div>
+                          ) : (<>
                           <div>
                             <label className="lbl block mb-1">
                               Studio Biblico di Congregazione (30 min) - Conduttore (M)
@@ -1560,6 +1641,7 @@ export function VitaEMinisteroView({
                               {renderParticipantOptions('studioBiblicoLettore', meeting.studioBiblicoReaderId, 'M')}
                             </select>
                           </div>
+                          </>)}
                         </div>
 
                         {/* Cantico Finale e Preghiera Finale */}

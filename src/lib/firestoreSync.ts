@@ -1,6 +1,7 @@
+import { normalizeDomenicaPrograms, serializeDomenicaPrograms } from '../utils/domenicaPrograms';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { StateData, MensileRow, DomenicaRow } from '../types';
+import { StateData, MensileRow, DomenicaRow, DomenicaMonthProgram } from '../types';
 
 const DOC_REF = doc(db, 'congregationData', 'main');
 
@@ -51,6 +52,7 @@ export interface ActiveProgramsData {
   domWarn: string | null;
   domMonth: number;
   domYear: number;
+  domPrograms?: Record<string, DomenicaMonthProgram>;
 }
 
 export function subscribeToCongregation(
@@ -76,6 +78,7 @@ export function subscribeToCongregation(
             menWarn: ap.menWarn || null,
             menMonth: typeof ap.menMonth === 'number' ? ap.menMonth : new Date().getMonth(),
             menYear: typeof ap.menYear === 'number' ? ap.menYear : new Date().getFullYear(),
+            domPrograms: normalizeDomenicaPrograms(ap.domPrograms),
             domRows: deserializeDomenicaRows(ap.domRows),
             domTitle: ap.domTitle || '',
             domWarn: ap.domWarn || null,
@@ -113,6 +116,9 @@ export async function pushActiveProgramsToFirestore(programs: ActiveProgramsData
       menWarn: programs.menWarn,
       menMonth: programs.menMonth,
       menYear: programs.menYear,
+      // Only touched periods are sent. Omit empty maps: Firestore would erase the map.
+      ...(Object.keys(programs.domPrograms || {}).length
+        ? { domPrograms: serializeDomenicaPrograms(programs.domPrograms) } : {}),
       domRows: serializeDomenicaRows(programs.domRows),
       domTitle: programs.domTitle,
       domWarn: programs.domWarn,

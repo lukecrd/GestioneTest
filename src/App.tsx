@@ -1,3 +1,5 @@
+import { domenicaPeriodKey, normalizeDomenicaPrograms, legacyDomenicaProgram, mergeDomenicaPrograms, serializeDomenicaPrograms, updateDomenicaPeriod, clearDomenicaPrograms } from './utils/domenicaPrograms';
+import { createSchedulingLedger, weeklyDates } from './utils/automaticScheduling';
 import { personNameKey, duplicatePersonNames, syncRegistryLinks } from './utils/peopleRegistry';
 import { exportProgramExcel } from './utils/programExcel';
 import React, { useState, useEffect, useRef } from 'react';
@@ -40,7 +42,7 @@ import {
   Radio,
   BookOpen,
 } from 'lucide-react';
-import { Person, StateData, MensileRow, DomenicaRow, ArchivedProgram, AuthUser, ChecklistProgramKey } from './types';
+import { Person, StateData, MensileRow, DomenicaRow, DomenicaMonthProgram, ArchivedProgram, AuthUser, ChecklistProgramKey } from './types';
 import { StatsView } from './components/StatsView';
 import { LoginScreen } from './components/LoginScreen';
 import { OperaPubblicaView } from './components/OperaPubblicaView';
@@ -61,6 +63,7 @@ import {
 } from './lib/firestoreSync';
 
 const STORAGE_KEY = 'dashboard_congregazione_v2';
+const DOMENICA_PROGRAMS_KEY = 'dashboard_congregazione_domenica_programs_v1';
 const GIORNI = ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'];
 const MESI = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
 const MESI_ABBR = ['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'];
@@ -250,6 +253,23 @@ export default function App() {
 
   // Helper to sync active programs to Firestore
   const syncActivePrograms = (overrides: Partial<ActiveProgramsData>) => {
+    const year = overrides.domYear ?? domYear;
+    const month = overrides.domMonth ?? domMonth;
+    const key = domenicaPeriodKey(year, month);
+    // Include locally migrated periods that do not yet have a cloud entry.
+    let updates = {
+      ...Object.fromEntries(Object.entries(domProgramsRef.current).filter(([period]) => !domCloudKeys.current.has(period))),
+      ...(overrides.domPrograms || {}),
+    };
+    if ('domRows' in overrides || 'domTitle' in overrides || 'domWarn' in overrides) {
+      const patch: Partial<DomenicaMonthProgram> = {};
+      if ('domRows' in overrides) patch.rows = overrides.domRows;
+      if ('domTitle' in overrides) patch.title = overrides.domTitle;
+      if ('domWarn' in overrides) patch.warn = overrides.domWarn;
+      const updated = updateDomenicaPeriod({ ...domProgramsRef.current, ...updates }, year, month, patch);
+      if (key && updated[key]) updates = { ...updates, [key]: updated[key] };
+    }
+    if (Object.keys(updates).length) persistDomenicaPrograms({ ...domProgramsRef.current, ...updates });
     const data: ActiveProgramsData = {
       menRows,
       menTitle,
@@ -262,6 +282,7 @@ export default function App() {
       domMonth,
       domYear,
       ...overrides,
+      domPrograms: updates,
     };
     pushActiveProgramsToFirestore(data).catch((err) => console.error('Active program sync error:', err));
   };
@@ -285,11 +306,15 @@ export default function App() {
           if (remotePrograms.menMonth !== undefined) setMenMonth(remotePrograms.menMonth);
           if (remotePrograms.menYear !== undefined) setMenYear(remotePrograms.menYear);
 
-          if ('domRows' in remotePrograms) setDomRows(remotePrograms.domRows);
-          if (remotePrograms.domTitle !== undefined) setDomTitle(remotePrograms.domTitle);
-          if (remotePrograms.domWarn !== undefined) setDomWarn(remotePrograms.domWarn);
-          if (remotePrograms.domMonth !== undefined) setDomMonth(remotePrograms.domMonth);
-          if (remotePrograms.domYear !== undefined) setDomYear(remotePrograms.domYear);
+          Object.keys(remotePrograms.domPrograms || {}).forEach(period => domCloudKeys.current.add(period));
+          persistDomenicaPrograms(mergeDomenicaPrograms(domProgramsRef.current, remotePrograms));
+          // Remote writes update saved data, without changing the month being viewed.
+          if (!hasLoadedSundaySelection.current) {
+            const legacy = legacyDomenicaProgram(remotePrograms);
+            setDomMonth(legacy?.month ?? remotePrograms.domMonth);
+            setDomYear(legacy?.year ?? remotePrograms.domYear);
+            hasLoadedSundaySelection.current = true;
+          }
         }
 
         setSyncMsg('✓ Sincronizzato Cloud ' + timeNow());
@@ -626,6 +651,9 @@ export default function App() {
   const generateMensile = (y: number, m: number) => {
     if (!checkAdminPermission()) return;
     const sundays = sundayDates(y, m);
+    const ledger = createSchedulingLedger(state, { mensileRows: menRows, domenicaRows: allDomenicaRows }, {
+      program: 'mensile', dates: sundays.flatMap(sunday => weeklyDates(sunday)),
+    });
     const uscieriPool = state.people.filter(p => p.roles.uscieri);
     const micPool = state.people.filter(p => p.roles.microfoni);
     const consolePool = state.people.filter(p => p.roles.console);
@@ -653,30 +681,28 @@ export default function App() {
         return;
       }
 
-      const unavailIds = state.people.filter(p => isUnavailable(p.id, sun, wed)).map(p => p.id);
+      const dates = weeklyDates(sun);
+      const unavailIds = state.people.filter(p => ledger.isUnavailable(p, dates) || ledger.isBusy(p, dates)).map(p => p.id);
 
       const chosenUsc: Person[] = [];
       for (let s = 0; s < 3; s++) {
-        const p = fairPick(uscieriPool, uc, ul, idx, [...unavailIds, ...chosenUsc.map(c => c.id)]);
-        if (p) { chosenUsc.push(p); markUsed(p, uc, ul, idx); }
+        const p = fairPick(uscieriPool.filter(p => !ledger.isBusy(p, dates)), uc, ul, idx, [...unavailIds, ...chosenUsc.map(c => c.id)]);
+        if (p) { chosenUsc.push(p); markUsed(p, uc, ul, idx); ledger.reserve(p, dates); }
       }
 
       // Microfonisti: prefer people not already assigned to Uscieri in the same week
       const usedInWeek = [...unavailIds, ...chosenUsc.map(c => c.id)];
       const chosenMic: Person[] = [];
       for (let s = 0; s < 2; s++) {
-        let p = fairPick(micPool, mc, ml, idx, [...usedInWeek, ...chosenMic.map(c => c.id)]);
-        if (!p) {
-          p = fairPick(micPool, mc, ml, idx, [...unavailIds, ...chosenMic.map(c => c.id)]);
-        }
-        if (p) { chosenMic.push(p); markUsed(p, mc, ml, idx); }
+        const p = fairPick(micPool.filter(p => !ledger.isBusy(p, dates)), mc, ml, idx, [...usedInWeek, ...chosenMic.map(c => c.id)]);
+        if (p) { chosenMic.push(p); markUsed(p, mc, ml, idx); ledger.reserve(p, dates); }
       }
 
       // Audio/Video: prefer people not already assigned to Uscieri or Microfonisti
       const assignedInWeekIds = [...usedInWeek, ...chosenMic.map(c => c.id)];
       let c1: Person | null = null, c2: Person | null = null;
 
-      const orderedPrimary = consolePool.filter(p => !assignedInWeekIds.includes(p.id)).sort((a, b) => {
+      const orderedPrimary = consolePool.filter(p => !assignedInWeekIds.includes(p.id) && !ledger.isBusy(p, dates)).sort((a, b) => {
         const ca = cc[a.id] || 0, cb = cc[b.id] || 0;
         if (ca !== cb) return ca - cb;
         return (cl[a.id] ?? -999) - (cl[b.id] ?? -999);
@@ -685,7 +711,7 @@ export default function App() {
       outerPrimary:
       for (let x = 0; x < orderedPrimary.length; x++) {
         for (let y = 0; y < orderedPrimary.length; y++) {
-          if (x === y) continue;
+          if (x === y || ledger.identity(orderedPrimary[x]) === ledger.identity(orderedPrimary[y])) continue;
           if (consolePairValid(orderedPrimary[x], orderedPrimary[y])) {
             c1 = orderedPrimary[x];
             c2 = orderedPrimary[y];
@@ -694,28 +720,16 @@ export default function App() {
         }
       }
 
-      if (!c1) {
-        const orderedFallback = consolePool.filter(p => !unavailIds.includes(p.id)).sort((a, b) => {
-          const ca = cc[a.id] || 0, cb = cc[b.id] || 0;
-          if (ca !== cb) return ca - cb;
-          return (cl[a.id] ?? -999) - (cl[b.id] ?? -999);
-        });
+      // A shortage leaves a role empty; do not reuse someone already assigned.
+      if (!c1 && orderedPrimary.length > 0) c1 = orderedPrimary[0];
+      if (c1) { markUsed(c1, cc, cl, idx); ledger.reserve(c1, dates); }
+      if (c2) { markUsed(c2, cc, cl, idx); ledger.reserve(c2, dates); }
 
-        outerFallback:
-        for (let x = 0; x < orderedFallback.length; x++) {
-          for (let y = 0; y < orderedFallback.length; y++) {
-            if (x === y) continue;
-            if (consolePairValid(orderedFallback[x], orderedFallback[y])) {
-              c1 = orderedFallback[x];
-              c2 = orderedFallback[y];
-              break outerFallback;
-            }
-          }
-        }
-      }
-
-      if (c1) markUsed(c1, cc, cl, idx);
-      if (c2) markUsed(c2, cc, cl, idx);
+      const missing = [];
+      if (chosenUsc.length < 3) missing.push(`${3 - chosenUsc.length} uscieri`);
+      if (chosenMic.length < 2) missing.push(`${2 - chosenMic.length} microfonisti`);
+      if (!c1 || !c2) missing.push(`${2 - Number(!!c1) - Number(!!c2)} audio/video`);
+      if (missing.length) warnings.push(`Settimana del ${fmtShort(sun)}: da assegnare ${missing.join(', ')}. Nessun nominativo idoneo libero.`);
 
       const riassetto = riassGroups[ri % riassGroups.length]; ri++;
       const pulizie = pulGroups[pi % pulGroups.length]; pi++;
@@ -1097,8 +1111,6 @@ try {
       confirmText: 'Azzera Turni',
       confirmVariant: 'danger',
       onConfirm: () => {
-        setDomRows(null);
-        setDomWarn(null);
         showToast('Turni adunanza domenica azzerati');
         setConfirmModalState(null);
         syncActivePrograms({ domRows: null, domWarn: null });
@@ -1120,8 +1132,6 @@ try {
         setMenRows(null);
         setMenWarn(null);
         setActiveArchiveId(null);
-        setDomRows(null);
-        setDomWarn(null);
         showToast('Tutti i programmi attivi sono stati azzerati');
         setConfirmModalState(null);
         syncActivePrograms({ menRows: null, menWarn: null, domRows: null, domWarn: null });
@@ -1142,11 +1152,12 @@ try {
         setMenRows(null);
         setMenWarn(null);
         setActiveArchiveId(null);
-        setDomRows(null);
-        setDomWarn(null);
         showToast('Dati ripristinati allo stato iniziale');
         setConfirmModalState(null);
-        syncActivePrograms({ menRows: null, menWarn: null, domRows: null, domWarn: null });
+        syncActivePrograms({
+          menRows: null, menWarn: null, domRows: null, domWarn: null, domTitle: '',
+          domPrograms: clearDomenicaPrograms(domProgramsRef.current),
+        });
       }
     });
   };
@@ -1154,9 +1165,23 @@ try {
   // --- ADUNANZA DOMENICA STATE ---
   const [domMonth, setDomMonth] = useState(now.getMonth());
   const [domYear, setDomYear] = useState(now.getFullYear());
-  const [domRows, setDomRows] = useState<DomenicaRow[] | null>(null);
-  const [domWarn, setDomWarn] = useState<string | null>(null);
-  const [domTitle, setDomTitle] = useState<string>('');
+  const [domPrograms, setDomPrograms] = useState<Record<string, DomenicaMonthProgram>>(() => {
+    try { return normalizeDomenicaPrograms(JSON.parse(storage.get(DOMENICA_PROGRAMS_KEY) || '{}')); }
+    catch { return {}; }
+  });
+  const domProgramsRef = useRef(domPrograms);
+  const domCloudKeys = useRef(new Set<string>());
+  const hasLoadedSundaySelection = useRef(false);
+  const persistDomenicaPrograms = (programs: Record<string, DomenicaMonthProgram>) => {
+    const normalized = normalizeDomenicaPrograms(programs);
+    domProgramsRef.current = normalized;
+    setDomPrograms(normalized);
+    storage.set(DOMENICA_PROGRAMS_KEY, JSON.stringify(serializeDomenicaPrograms(normalized)));
+  };
+  const domProgram = domPrograms[domenicaPeriodKey(domYear, domMonth)];
+  const domRows = domProgram?.rows ?? null;
+  const domWarn = domProgram?.warn ?? null;
+  const domTitle = domProgram?.title || `${MESI[domMonth]} ${domYear}`;
   const importedOctoberRows = domRows?.map(row => {
     const sample = domTitle === 'Ottobre 2026' ? OCTOBRE_2026_WEEKEND[iso(row.date)] : undefined;
     if (!sample || row.titoloDiscorso !== undefined) return row;
@@ -1174,9 +1199,14 @@ try {
     ? [...importedOctoberRows, { date: addDays(importedOctoberRows[importedOctoberRows.length - 1].date, 7), placeholder: true, oratore: '', congregazione: '', titoloDiscorso: '', presidente: '', lettore: '' }]
     : importedOctoberRows;
 
+  const allDomenicaRows = Object.values(domPrograms).flatMap(program => program.rows || []);
+
   const generateDomenica = (y: number, m: number) => {
     if (!checkAdminPermission()) return;
     const sundays = sundayDates(y, m);
+    const ledger = createSchedulingLedger(state, { mensileRows: menRows, domenicaRows: allDomenicaRows }, {
+      program: 'domenica', dates: sundays.map(iso),
+    });
     const presPool = state.people.filter(p => p.roles.presidentePubblica);
     const lettPool = state.people.filter(p => p.roles.lettore);
     const pc: Record<string, number> = {}, pl: Record<string, number> = {};
@@ -1198,23 +1228,27 @@ try {
         rows.push({ date: sun, special: sample.titoloDiscorso, oratore: '', congregazione: '', titoloDiscorso: sample.titoloDiscorso, presidente: '', lettore: '' });
         return;
       }
-      const wed = addDays(sun, 3);
-      const unavailIds = state.people.filter(p => isUnavailable(p.id, sun, wed)).map(p => p.id);
+      const existing = domenicaProgramRows?.find(row => !row.placeholder && iso(row.date) === key);
+      const oratore = existing?.oratore ?? sample?.oratore ?? '';
+      if (oratore) ledger.reserve({ name: oratore }, key);
+      const unavailIds = state.people.filter(p => ledger.isUnavailable(p, key) || ledger.isBusy(p, key)).map(p => p.id);
       const used = [...unavailIds];
 
       const pres = fairPick(presPool, pc, pl, idx, used);
-      if (pres) { markUsed(pres, pc, pl, idx); used.push(pres.id); }
+      if (pres) { markUsed(pres, pc, pl, idx); used.push(pres.id); ledger.reserve(pres, key); }
 
-      const lett = fairPick(lettPool, lc, ll, idx, used);
-      if (lett) { markUsed(lett, lc, ll, idx); used.push(lett.id); }
+      const lett = fairPick(lettPool.filter(p => !ledger.isBusy(p, key)), lc, ll, idx, used);
+      if (lett) { markUsed(lett, lc, ll, idx); used.push(lett.id); ledger.reserve(lett, key); }
+      if (!pres) warnings.push(`${fmtDate(sun)}: presidente da assegnare, nessun nominativo idoneo libero.`);
+      if (!lett) warnings.push(`${fmtDate(sun)}: lettore da assegnare, nessun nominativo idoneo libero.`);
 
       const row: DomenicaRow = {
         date: sun,
-        oratore: sample?.oratore || '',
-        congregazione: sample?.congregazione || '',
-        titoloDiscorso: sample?.titoloDiscorso || '',
+        oratore,
+        congregazione: existing?.congregazione ?? sample?.congregazione ?? '',
+        titoloDiscorso: existing?.titoloDiscorso ?? sample?.titoloDiscorso ?? '',
         presidente: pres?.name || '—',
-        lettore: sample?.lettore || lett?.name || '—',
+        lettore: lett?.name || '—',
       };
 
       // Validation check for duplicates
@@ -1260,9 +1294,6 @@ try {
 
     const title = `${MESI[m]} ${y}`;
     const warn = warnings.join(' ') || null;
-    setDomTitle(title);
-    setDomRows(rows);
-    setDomWarn(warn);
     syncActivePrograms({
       domRows: rows,
       domTitle: title,
@@ -1275,7 +1306,6 @@ try {
   const updateDomenicaField = (rowIndex: number, field: 'oratore' | 'congregazione' | 'titoloDiscorso' | 'presidente' | 'lettore', value: string) => {
     if (!checkAdminPermission() || !domenicaProgramRows) return;
     const updatedRows = domenicaProgramRows.map((row, index) => index === rowIndex ? { ...row, [field]: value } : row);
-    setDomRows(updatedRows);
     syncActivePrograms({ domRows: updatedRows });
   };
 
@@ -2350,7 +2380,7 @@ try {
                 <label className="lbl">Mese</label>
                 <select
                   value={domMonth}
-                  onChange={e => setDomMonth(parseInt(e.target.value, 10))}
+                  onChange={e => { hasLoadedSundaySelection.current = true; setDomMonth(parseInt(e.target.value, 10)); }}
                   className="inp"
                 >
                   {MESI.map((m, i) => (
@@ -2363,7 +2393,7 @@ try {
                 <input
                   type="number"
                   value={domYear}
-                  onChange={e => setDomYear(parseInt(e.target.value, 10))}
+                  onChange={e => { hasLoadedSundaySelection.current = true; setDomYear(parseInt(e.target.value, 10)); }}
                   className="inp"
                 />
               </div>
@@ -2794,6 +2824,7 @@ try {
       {activeTab === 'vitaEMinistero' && (
         <VitaEMinisteroView
           state={state}
+          activePrograms={{ mensileRows: menRows, domenicaRows: allDomenicaRows }}
           onSaveState={saveState}
           isAdmin={currentUser?.role === 'admin'}
           onShowToast={showToast}
@@ -2805,6 +2836,7 @@ try {
       {activeTab === 'servizioCampo' && (
         <ServizioCampoView
           state={state}
+          activePrograms={{ mensileRows: menRows, domenicaRows: allDomenicaRows }}
           onSaveState={saveState}
           isAdmin={currentUser?.role === 'admin'}
           onShowToast={showToast}
@@ -2816,6 +2848,7 @@ try {
       {activeTab === 'operaPubblica' && (
         <OperaPubblicaView
           state={state}
+          activePrograms={{ mensileRows: menRows, domenicaRows: allDomenicaRows }}
           onSaveState={saveState}
           isAdmin={currentUser?.role === 'admin'}
           onShowToast={showToast}

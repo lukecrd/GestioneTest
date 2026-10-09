@@ -191,7 +191,7 @@ export function computeVitaStats(
     });
 
     // 8. Studio Biblico di Congregazione
-    if (meeting.studioBiblicoConductorId) {
+    if (meeting.studioBiblicoType !== 'discorsoSorvegliante' && meeting.studioBiblicoConductorId) {
       recordAssignment(
         meeting.studioBiblicoConductorId,
         meeting,
@@ -199,7 +199,7 @@ export function computeVitaStats(
         'Studio biblico di congregazione (Conduttore)'
       );
     }
-    if (meeting.studioBiblicoReaderId) {
+    if (meeting.studioBiblicoType !== 'discorsoSorvegliante' && meeting.studioBiblicoReaderId) {
       recordAssignment(
         meeting.studioBiblicoReaderId,
         meeting,
