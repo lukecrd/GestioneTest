@@ -71,3 +71,19 @@ export function clearDomenicaPrograms(programs) {
     key, { ...value, rows: null, title: '', warn: null },
   ]));
 }
+
+/** The visible programme must belong to the selected period, never the last active month. */
+export function selectDomenicaProgram(programs, year, month) {
+  const program = programs?.[domenicaPeriodKey(year, month)];
+  if (!program) return null;
+  if (!program.rows) return program;
+  const ordinary = program.rows.filter(row => !row.placeholder && row.date instanceof Date &&
+    row.date.getFullYear() === year && row.date.getMonth() === month);
+  return { ...program, rows: ordinary.length
+    ? program.rows.filter(row => row.placeholder || ordinary.includes(row)) : null };
+}
+
+export function readProgramSelection(key, fallbackDate = new Date()) {
+  if (typeof key === 'string' && validKey(key)) return { year: Number(key.slice(0, 4)), month: Number(key.slice(5)) - 1 };
+  return { year: fallbackDate.getFullYear(), month: fallbackDate.getMonth() };
+}
