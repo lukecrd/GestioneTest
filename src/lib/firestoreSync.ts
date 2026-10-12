@@ -1,7 +1,8 @@
+import { normalizeMensilePrograms, serializeMensilePrograms } from '../utils/mensilePrograms';
 import { normalizeDomenicaPrograms, serializeDomenicaPrograms } from '../utils/domenicaPrograms';
 import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 import { db } from '../firebase';
-import { StateData, MensileRow, DomenicaRow, DomenicaMonthProgram } from '../types';
+import { StateData, MensileRow, DomenicaRow, DomenicaMonthProgram, MensileMonthProgram } from '../types';
 
 const DOC_REF = doc(db, 'congregationData', 'main');
 
@@ -47,6 +48,7 @@ export interface ActiveProgramsData {
   menWarn: string | null;
   menMonth: number;
   menYear: number;
+  menPrograms?: Record<string, MensileMonthProgram>;
   domRows: DomenicaRow[] | null;
   domTitle: string;
   domWarn: string | null;
@@ -73,6 +75,7 @@ export function subscribeToCongregation(
         if (raw.activePrograms) {
           const ap = raw.activePrograms;
           result.activePrograms = {
+            menPrograms: normalizeMensilePrograms(ap.menPrograms),
             menRows: deserializeMensileRows(ap.menRows),
             menTitle: ap.menTitle || '',
             menWarn: ap.menWarn || null,
@@ -111,6 +114,8 @@ export async function pushStateToFirestore(state: StateData) {
 export async function pushActiveProgramsToFirestore(programs: ActiveProgramsData) {
   const payload = {
     activePrograms: {
+      ...(Object.keys(programs.menPrograms || {}).length
+        ? { menPrograms: serializeMensilePrograms(programs.menPrograms) } : {}),
       menRows: serializeMensileRows(programs.menRows),
       menTitle: programs.menTitle,
       menWarn: programs.menWarn,
