@@ -1,4 +1,5 @@
-import { domenicaPeriodKey, normalizeDomenicaPrograms, legacyDomenicaProgram, mergeDomenicaPrograms, serializeDomenicaPrograms, updateDomenicaPeriod, clearDomenicaPrograms } from './utils/domenicaPrograms';
+import { normalizeMensilePrograms, legacyMensileProgram, mergeMensilePrograms, serializeMensilePrograms, updateMensilePeriod, clearMensilePrograms } from './utils/mensilePrograms';
+import { domenicaPeriodKey, normalizeDomenicaPrograms, selectDomenicaProgram, readProgramSelection, legacyDomenicaProgram, mergeDomenicaPrograms, serializeDomenicaPrograms, updateDomenicaPeriod, clearDomenicaPrograms } from './utils/domenicaPrograms';
 import { createSchedulingLedger, weeklyDates } from './utils/automaticScheduling';
 import { personNameKey, duplicatePersonNames, syncRegistryLinks } from './utils/peopleRegistry';
 import { exportProgramExcel } from './utils/programExcel';
@@ -42,7 +43,7 @@ import {
   Radio,
   BookOpen,
 } from 'lucide-react';
-import { Person, StateData, MensileRow, DomenicaRow, DomenicaMonthProgram, ArchivedProgram, AuthUser, ChecklistProgramKey } from './types';
+import { Person, StateData, MensileRow, DomenicaRow, DomenicaMonthProgram, MensileMonthProgram, ArchivedProgram, AuthUser, ChecklistProgramKey } from './types';
 import { StatsView } from './components/StatsView';
 import { LoginScreen } from './components/LoginScreen';
 import { OperaPubblicaView } from './components/OperaPubblicaView';
@@ -63,6 +64,7 @@ import {
 } from './lib/firestoreSync';
 
 const STORAGE_KEY = 'dashboard_congregazione_v2';
+const MENSILE_PROGRAMS_KEY = 'dashboard_congregazione_mensile_programs_v1';
 const DOMENICA_PROGRAMS_KEY = 'dashboard_congregazione_domenica_programs_v1';
 const GIORNI = ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'];
 const MESI = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
@@ -270,6 +272,22 @@ export default function App() {
       if (key && updated[key]) updates = { ...updates, [key]: updated[key] };
     }
     if (Object.keys(updates).length) persistDomenicaPrograms({ ...domProgramsRef.current, ...updates });
+    const menY = overrides.menYear ?? menYear;
+    const menM = overrides.menMonth ?? menMonth;
+    const menKey = domenicaPeriodKey(menY, menM);
+    let menUpdates = {
+      ...Object.fromEntries(Object.entries(menProgramsRef.current).filter(([period]) => !menCloudKeys.current.has(period))),
+      ...(overrides.menPrograms || {}),
+    };
+    if ('menRows' in overrides || 'menTitle' in overrides || 'menWarn' in overrides) {
+      const patch: Partial<MensileMonthProgram> = {};
+      if ('menRows' in overrides) patch.rows = overrides.menRows;
+      if ('menTitle' in overrides) patch.title = overrides.menTitle;
+      if ('menWarn' in overrides) patch.warn = overrides.menWarn;
+      const updated = updateMensilePeriod({ ...menProgramsRef.current, ...menUpdates }, menY, menM, patch);
+      if (menKey && updated[menKey]) menUpdates = { ...menUpdates, [menKey]: updated[menKey] };
+    }
+    if (Object.keys(menUpdates).length) persistMensilePrograms({ ...menProgramsRef.current, ...menUpdates });
     const data: ActiveProgramsData = {
       menRows,
       menTitle,
@@ -283,8 +301,13 @@ export default function App() {
       domYear,
       ...overrides,
       domPrograms: updates,
+      menPrograms: menUpdates,
     };
-    pushActiveProgramsToFirestore(data).catch((err) => console.error('Active program sync error:', err));
+    pushActiveProgramsToFirestore(data).catch((err) => {
+      console.error('Active program sync error:', err);
+      setSyncMsg('Offline — Programmi salvati in locale');
+      setSyncClass('text-amber-600');
+    });
   };
 
   useEffect(() => {
@@ -299,13 +322,18 @@ export default function App() {
           storage.set(STORAGE_KEY, JSON.stringify(norm));
         }
 
-        if (remotePrograms) {
-          if ('menRows' in remotePrograms) setMenRows(remotePrograms.menRows);
-          if (remotePrograms.menTitle !== undefined) setMenTitle(remotePrograms.menTitle);
-          if (remotePrograms.menWarn !== undefined) setMenWarn(remotePrograms.menWarn);
-          if (remotePrograms.menMonth !== undefined) setMenMonth(remotePrograms.menMonth);
-          if (remotePrograms.menYear !== undefined) setMenYear(remotePrograms.menYear);
+        if (remotePrograms || remoteState) {
+          Object.keys(remotePrograms?.menPrograms || {}).forEach(period => menCloudKeys.current.add(period));
+          persistMensilePrograms(mergeMensilePrograms(menProgramsRef.current, remotePrograms, remoteState?.mensileArchives || []));
+          if (remotePrograms && !hasLoadedMonthlySelection.current) {
+            const legacy = legacyMensileProgram(remotePrograms);
+            setMenMonth(legacy?.month ?? remotePrograms.menMonth);
+            setMenYear(legacy?.year ?? remotePrograms.menYear);
+            hasLoadedMonthlySelection.current = true;
+          }
+        }
 
+        if (remotePrograms) {
           Object.keys(remotePrograms.domPrograms || {}).forEach(period => domCloudKeys.current.add(period));
           persistDomenicaPrograms(mergeDomenicaPrograms(domProgramsRef.current, remotePrograms));
           // Remote writes update saved data, without changing the month being viewed.
@@ -450,7 +478,6 @@ export default function App() {
       if (i !== rowIndex || r.special) return r;
       return { ...r, [field]: value };
     });
-    setMenRows(updatedRows);
     syncActivePrograms({ menRows: updatedRows });
     showToast('Gruppo aggiornato');
   };
@@ -642,16 +669,41 @@ export default function App() {
 
   // --- PROGRAMMA MENSILE STATE ---
   const now = new Date();
-  const [menMonth, setMenMonth] = useState(now.getMonth());
-  const [menYear, setMenYear] = useState(now.getFullYear());
-  const [menRows, setMenRows] = useState<MensileRow[] | null>(null);
-  const [menWarn, setMenWarn] = useState<string | null>(null);
-  const [menTitle, setMenTitle] = useState<string>('');
+  const initialMenSelection = readProgramSelection(storage.get(MENSILE_PROGRAMS_KEY + '_selection'), now);
+  const [menMonth, setMenMonth] = useState(initialMenSelection.month);
+  const [menYear, setMenYear] = useState(initialMenSelection.year);
+  const [menPrograms, setMenPrograms] = useState<Record<string, MensileMonthProgram>>(() => {
+    try { return mergeMensilePrograms(JSON.parse(storage.get(MENSILE_PROGRAMS_KEY) || '{}'), {}, state.mensileArchives || []); }
+    catch { return mergeMensilePrograms({}, {}, state.mensileArchives || []); }
+  });
+  const menProgramsRef = useRef(menPrograms);
+  const menCloudKeys = useRef(new Set<string>());
+  const hasLoadedMonthlySelection = useRef(!!storage.get(MENSILE_PROGRAMS_KEY + '_selection'));
+  const persistMensilePrograms = (programs: Record<string, MensileMonthProgram>) => {
+    const normalized = normalizeMensilePrograms(programs);
+    menProgramsRef.current = normalized;
+    setMenPrograms(normalized);
+    storage.set(MENSILE_PROGRAMS_KEY, JSON.stringify(serializeMensilePrograms(normalized)));
+  };
+  const changeMensilePeriod = (year: number, month: number) => {
+    const key = domenicaPeriodKey(year, month);
+    if (!key) return;
+    hasLoadedMonthlySelection.current = true;
+    setMenYear(year);
+    setMenMonth(month);
+    setActiveArchiveId(null);
+    storage.set(MENSILE_PROGRAMS_KEY + '_selection', key);
+  };
+  const menProgram = menPrograms[domenicaPeriodKey(menYear, menMonth)];
+  const menRows = menProgram?.rows ?? null;
+  const menWarn = menProgram?.warn ?? null;
+  const menTitle = menProgram?.title || `Mese di ${MESI[menMonth]} ${menYear}`;
+  const allMensileRows = Object.values(menPrograms).flatMap(program => program.rows || []);
 
   const generateMensile = (y: number, m: number) => {
     if (!checkAdminPermission()) return;
     const sundays = sundayDates(y, m);
-    const ledger = createSchedulingLedger(state, { mensileRows: menRows, domenicaRows: allDomenicaRows }, {
+    const ledger = createSchedulingLedger(state, { mensileRows: allMensileRows, domenicaRows: allDomenicaRows }, {
       program: 'mensile', dates: sundays.flatMap(sunday => weeklyDates(sunday)),
     });
     const uscieriPool = state.people.filter(p => p.roles.uscieri);
@@ -780,9 +832,6 @@ export default function App() {
 
     const title = `Mese di ${MESI[m]} ${y}`;
     const warn = warnings.join(' ') || null;
-    setMenTitle(title);
-    setMenRows(rows);
-    setMenWarn(warn);
     setActiveArchiveId(null);
     syncActivePrograms({
       menRows: rows,
@@ -870,8 +919,6 @@ export default function App() {
     });
 
     const combinedWarn = updatedRows.flatMap(r => r.warnings || []).join(' ') || null;
-    setMenRows(updatedRows);
-    setMenWarn(combinedWarn);
     syncActivePrograms({ menRows: updatedRows, menWarn: combinedWarn });
     showToast('Incarico aggiornato');
   };
@@ -1025,11 +1072,7 @@ try {
       duplicates: r.duplicates,
       warnings: r.warnings
     }));
-    setMenRows(rows);
-    setMenTitle(archive.title);
-    setMenWarn(archive.warn || null);
-    setMenMonth(archive.month);
-    setMenYear(archive.year);
+    changeMensilePeriod(archive.year, archive.month);
     setActiveArchiveId(archive.id);
     showToast(`Caricato dall'archivio: ${archive.title}`);
     syncActivePrograms({
@@ -1090,8 +1133,6 @@ try {
       confirmText: 'Azzera Programma',
       confirmVariant: 'danger',
       onConfirm: () => {
-        setMenRows(null);
-        setMenWarn(null);
         setActiveArchiveId(null);
         showToast('Programma mensile azzerato');
         setConfirmModalState(null);
@@ -1129,8 +1170,6 @@ try {
       confirmText: 'Azzera Tutti i Programmi',
       confirmVariant: 'danger',
       onConfirm: () => {
-        setMenRows(null);
-        setMenWarn(null);
         setActiveArchiveId(null);
         showToast('Tutti i programmi attivi sono stati azzerati');
         setConfirmModalState(null);
@@ -1149,36 +1188,44 @@ try {
         localStorage.removeItem(STORAGE_KEY);
         const initial = loadInitialState();
         saveState(initial);
-        setMenRows(null);
-        setMenWarn(null);
         setActiveArchiveId(null);
         showToast('Dati ripristinati allo stato iniziale');
         setConfirmModalState(null);
         syncActivePrograms({
           menRows: null, menWarn: null, domRows: null, domWarn: null, domTitle: '',
           domPrograms: clearDomenicaPrograms(domProgramsRef.current),
+          menPrograms: clearMensilePrograms(menProgramsRef.current),
         });
       }
     });
   };
 
   // --- ADUNANZA DOMENICA STATE ---
-  const [domMonth, setDomMonth] = useState(now.getMonth());
-  const [domYear, setDomYear] = useState(now.getFullYear());
+  const initialDomSelection = readProgramSelection(storage.get(DOMENICA_PROGRAMS_KEY + '_selection'), now);
+  const [domMonth, setDomMonth] = useState(initialDomSelection.month);
+  const [domYear, setDomYear] = useState(initialDomSelection.year);
   const [domPrograms, setDomPrograms] = useState<Record<string, DomenicaMonthProgram>>(() => {
     try { return normalizeDomenicaPrograms(JSON.parse(storage.get(DOMENICA_PROGRAMS_KEY) || '{}')); }
     catch { return {}; }
   });
   const domProgramsRef = useRef(domPrograms);
   const domCloudKeys = useRef(new Set<string>());
-  const hasLoadedSundaySelection = useRef(false);
+  const hasLoadedSundaySelection = useRef(!!storage.get(DOMENICA_PROGRAMS_KEY + '_selection'));
   const persistDomenicaPrograms = (programs: Record<string, DomenicaMonthProgram>) => {
     const normalized = normalizeDomenicaPrograms(programs);
     domProgramsRef.current = normalized;
     setDomPrograms(normalized);
     storage.set(DOMENICA_PROGRAMS_KEY, JSON.stringify(serializeDomenicaPrograms(normalized)));
   };
-  const domProgram = domPrograms[domenicaPeriodKey(domYear, domMonth)];
+  const changeDomenicaPeriod = (year: number, month: number) => {
+    const key = domenicaPeriodKey(year, month);
+    if (!key) return;
+    hasLoadedSundaySelection.current = true;
+    setDomYear(year);
+    setDomMonth(month);
+    storage.set(DOMENICA_PROGRAMS_KEY + '_selection', key);
+  };
+  const domProgram = selectDomenicaProgram(domPrograms, domYear, domMonth);
   const domRows = domProgram?.rows ?? null;
   const domWarn = domProgram?.warn ?? null;
   const domTitle = domProgram?.title || `${MESI[domMonth]} ${domYear}`;
@@ -1204,7 +1251,7 @@ try {
   const generateDomenica = (y: number, m: number) => {
     if (!checkAdminPermission()) return;
     const sundays = sundayDates(y, m);
-    const ledger = createSchedulingLedger(state, { mensileRows: menRows, domenicaRows: allDomenicaRows }, {
+    const ledger = createSchedulingLedger(state, { mensileRows: allMensileRows, domenicaRows: allDomenicaRows }, {
       program: 'domenica', dates: sundays.map(iso),
     });
     const presPool = state.people.filter(p => p.roles.presidentePubblica);
@@ -2085,10 +2132,11 @@ try {
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 mt-4">
               <div className="flex flex-col gap-1">
-                <label className="lbl">Mese</label>
+                <label className="lbl" htmlFor="men-month">Mese</label>
                 <select
+                  id="men-month"
                   value={menMonth}
-                  onChange={e => setMenMonth(parseInt(e.target.value, 10))}
+                  onChange={e => changeMensilePeriod(menYear, parseInt(e.target.value, 10))}
                   className="inp"
                 >
                   {MESI.map((m, i) => (
@@ -2097,11 +2145,12 @@ try {
                 </select>
               </div>
               <div className="flex flex-col gap-1">
-                <label className="lbl">Anno</label>
+                <label className="lbl" htmlFor="men-year">Anno</label>
                 <input
+                  id="men-year"
                   type="number"
                   value={menYear}
-                  onChange={e => setMenYear(parseInt(e.target.value, 10))}
+                  onChange={e => changeMensilePeriod(parseInt(e.target.value, 10), menMonth)}
                   className="inp"
                 />
               </div>
@@ -2164,6 +2213,11 @@ try {
             )}
           </div>
 
+          {!menRows && (
+            <div className="card no-print text-sm text-slate-500" role="status">
+              Nessun programma salvato per {MESI[menMonth]} {menYear}.
+            </div>
+          )}
           {/* ARCHIVIO PROGRAMMI MENSILE */}
           <div className="card mb-5 no-print">
             <div className="flex items-center justify-between gap-2 mb-2 pb-2 border-b border-slate-100 dark:border-slate-800">
@@ -2190,7 +2244,7 @@ try {
 
             {(!state.mensileArchives || state.mensileArchives.length === 0) ? (
               <p className="text-xs text-slate-400 dark:text-slate-500 py-3 text-center">
-                Nessun programma archiviato. Genera un programma mensile e clicca su "Salva in Archivio" per consultarlo in seguito.
+                I programmi vengono salvati automaticamente per mese e anno. Puoi conservare anche una copia nell'archivio.
               </p>
             ) : (
               <div className="table-wrapper border border-slate-200 dark:border-slate-800 rounded-xl mt-3">
@@ -2377,10 +2431,11 @@ try {
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5 mt-4">
               <div className="flex flex-col gap-1">
-                <label className="lbl">Mese</label>
+                <label className="lbl" htmlFor="dom-month">Mese</label>
                 <select
+                  id="dom-month"
                   value={domMonth}
-                  onChange={e => { hasLoadedSundaySelection.current = true; setDomMonth(parseInt(e.target.value, 10)); }}
+                  onChange={e => changeDomenicaPeriod(domYear, parseInt(e.target.value, 10))}
                   className="inp"
                 >
                   {MESI.map((m, i) => (
@@ -2389,11 +2444,12 @@ try {
                 </select>
               </div>
               <div className="flex flex-col gap-1">
-                <label className="lbl">Anno</label>
+                <label className="lbl" htmlFor="dom-year">Anno</label>
                 <input
+                  id="dom-year"
                   type="number"
                   value={domYear}
-                  onChange={e => { hasLoadedSundaySelection.current = true; setDomYear(parseInt(e.target.value, 10)); }}
+                  onChange={e => changeDomenicaPeriod(parseInt(e.target.value, 10), domMonth)}
                   className="inp"
                 />
               </div>
@@ -2409,6 +2465,11 @@ try {
             </div>
           </div>
 
+          {!domenicaProgramRows && (
+            <div className="card no-print text-sm text-slate-500" role="status">
+              Nessun programma salvato per {MESI[domMonth]} {domYear}.
+            </div>
+          )}
           {domenicaProgramRows && (
             <div className="weekend-program">
               <div className="no-print flex flex-wrap justify-end gap-2 p-3">
@@ -2824,7 +2885,7 @@ try {
       {activeTab === 'vitaEMinistero' && (
         <VitaEMinisteroView
           state={state}
-          activePrograms={{ mensileRows: menRows, domenicaRows: allDomenicaRows }}
+          activePrograms={{ mensileRows: allMensileRows, domenicaRows: allDomenicaRows }}
           onSaveState={saveState}
           isAdmin={currentUser?.role === 'admin'}
           onShowToast={showToast}
@@ -2836,7 +2897,7 @@ try {
       {activeTab === 'servizioCampo' && (
         <ServizioCampoView
           state={state}
-          activePrograms={{ mensileRows: menRows, domenicaRows: allDomenicaRows }}
+          activePrograms={{ mensileRows: allMensileRows, domenicaRows: allDomenicaRows }}
           onSaveState={saveState}
           isAdmin={currentUser?.role === 'admin'}
           onShowToast={showToast}
@@ -2848,7 +2909,7 @@ try {
       {activeTab === 'operaPubblica' && (
         <OperaPubblicaView
           state={state}
-          activePrograms={{ mensileRows: menRows, domenicaRows: allDomenicaRows }}
+          activePrograms={{ mensileRows: allMensileRows, domenicaRows: allDomenicaRows }}
           onSaveState={saveState}
           isAdmin={currentUser?.role === 'admin'}
           onShowToast={showToast}
