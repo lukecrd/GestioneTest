@@ -61,6 +61,6 @@ export function updateMensilePeriod(programs, year, month, patch) {
 
 export function clearMensilePrograms(programs) {
   return Object.fromEntries(Object.entries(normalizeMensilePrograms(programs)).map(([key, program]) => [
-    key, { ...program, rows: null, title: '', warn: null },
+    key, { ...program, rows: null, title: '', warn: null, fromArchive: false },
   ]));
 }
