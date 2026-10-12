@@ -86,3 +86,11 @@ test('actual App sync persists one edited month and preserves all other monthly 
   assert.deepEqual(Object.keys(payload.menPrograms), ['2026-10']);
   assert.equal(menProgramsRef.current['2026-11'].rows[0].ingresso[0], 'Novembre');
 });
+
+test('full reset cannot revive a migrated archive when a stale legacy snapshot arrives', () => {
+  const archive = { month: 9, year: 2026, rows: [{ dateStr: '2026-10-04', ingresso: ['Archivio', 'Prova'] }] };
+  const migrated = mergeMensilePrograms({}, {}, [archive]);
+  const cleared = clearMensilePrograms(migrated);
+  const restored = mergeMensilePrograms(cleared, { menRows: rows('2026-10-04', 'Vecchio attivo') }, [archive]);
+  assert.equal(restored['2026-10'].rows, null);
+});
