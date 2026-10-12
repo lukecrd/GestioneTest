@@ -1,8 +1,9 @@
+import { normalizeMensilePrograms, serializeMensilePrograms, updateMensilePeriod } from '../src/utils/mensilePrograms.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import ts from 'typescript';
-import { domenicaPeriodKey, normalizeDomenicaPrograms, legacyDomenicaProgram, mergeDomenicaPrograms, serializeDomenicaPrograms, updateDomenicaPeriod, clearDomenicaPrograms } from '../src/utils/domenicaPrograms.js';
+import { domenicaPeriodKey, normalizeDomenicaPrograms, selectDomenicaProgram, readProgramSelection, legacyDomenicaProgram, mergeDomenicaPrograms, serializeDomenicaPrograms, updateDomenicaPeriod, clearDomenicaPrograms } from '../src/utils/domenicaPrograms.js';
 
 const rows = (date, speaker) => [{ date: new Date(date + 'T12:00:00'), oratore: speaker, presidente: 'Presidente', lettore: 'Lettore', titoloDiscorso: 'Titolo' }];
 const save = (programs, year, month, speaker) => updateDomenicaPeriod(programs, year, month, {
@@ -83,6 +84,8 @@ test('actual App sync saves only the edited period plus unsynced legacy months',
   const domCloudKeys = { current: new Set() };
   let payload;
   const context = { domenicaPeriodKey, updateDomenicaPeriod, domProgramsRef, domCloudKeys,
+    updateMensilePeriod, menProgramsRef: { current: {} }, menCloudKeys: { current: new Set() },
+    persistMensilePrograms: () => {},
     persistDomenicaPrograms: programs => { domProgramsRef.current = normalizeDomenicaPrograms(programs); },
     menRows: null, menTitle: '', menWarn: null, menMonth: 9, menYear: 2026,
     domRows: october['2026-10'].rows, domTitle: 'Ottobre', domWarn: null, domMonth: 9, domYear: 2026,
@@ -105,10 +108,10 @@ test('Firestore round-trip includes monthly programmes and unrelated writes omit
   const compiled = ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
   let payload;
   const raw = { activePrograms: { domMonth: 9, domYear: 2026 } };
-  const api = new Function('doc', 'db', 'onSnapshot', 'setDoc', 'normalizeDomenicaPrograms', 'serializeDomenicaPrograms',
+  const api = new Function('doc', 'db', 'onSnapshot', 'setDoc', 'normalizeDomenicaPrograms', 'serializeDomenicaPrograms', 'normalizeMensilePrograms', 'serializeMensilePrograms',
     compiled + ';return {pushActiveProgramsToFirestore,subscribeToCongregation};')(
       () => ({}), {}, (ref, callback) => { callback({ exists: () => true, data: () => raw }); return () => {}; },
-      async (ref, data) => { payload = data; }, normalizeDomenicaPrograms, serializeDomenicaPrograms);
+      async (ref, data) => { payload = data; }, normalizeDomenicaPrograms, serializeDomenicaPrograms, normalizeMensilePrograms, serializeMensilePrograms);
   const active = { menRows: null, menTitle: '', menWarn: null, menMonth: 9, menYear: 2026,
     domRows: null, domTitle: '', domWarn: null, domMonth: 9, domYear: 2026, domPrograms: {} };
   await api.pushActiveProgramsToFirestore(active);
@@ -121,4 +124,18 @@ test('Firestore round-trip includes monthly programmes and unrelated writes omit
   api.subscribeToCongregation(data => { restored = data.activePrograms.domPrograms; }, error => { throw error; });
   assert.ok(restored['2026-10'].rows[0].date instanceof Date);
   assert.equal(restored['2026-10'].rows[0].oratore, 'Salvato');
+});
+
+test('Sunday selection never displays rows belonging to another month or year', () => {
+  const wrong = { '2026-10': { rows: rows('2026-11-01', 'Novembre') } };
+  assert.equal(selectDomenicaProgram(wrong, 2026, 9).rows, null);
+  const saved = save(save({}, 2026, 9, 'Ottobre'), 2026, 10, 'Novembre');
+  assert.equal(selectDomenicaProgram(saved, 2026, 9).rows[0].oratore, 'Ottobre');
+  assert.equal(selectDomenicaProgram(saved, 2027, 9), null);
+});
+
+test('last browsed period restores independently from the current date and cloud active period', () => {
+  const initial = new Date('2026-10-12T12:00:00');
+  assert.deepEqual(readProgramSelection('2026-09', initial), { year: 2026, month: 8 });
+  assert.deepEqual(readProgramSelection('bad', initial), { year: 2026, month: 9 });
 });
