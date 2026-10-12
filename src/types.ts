@@ -329,6 +329,15 @@ export interface MensileRow {
   warnings?: string[];
 }
 
+export interface MensileMonthProgram {
+  rows: MensileRow[] | null;
+  title: string;
+  warn: string | null;
+  month: number;
+  year: number;
+  fromArchive?: boolean;
+}
+
 export interface DomenicaMonthProgram {
   rows: DomenicaRow[] | null;
   title: string;
