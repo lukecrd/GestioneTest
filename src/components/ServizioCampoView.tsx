@@ -2323,7 +2323,7 @@ await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(r
           {/* Quick Metrics */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div className="card p-4 border-l-4 border-l-sky-500">
-              <span className="text-[11px] font-semibold uppercase text-slate-400">Conduttori Impiegati nel Mese</span>
+              <span className="text-[11px] font-semibold text-slate-400">Conduttori Impiegati nel Mese</span>
               <div className="text-2xl font-black text-slate-900 dark:text-slate-100 mt-1">
                 {activeConductorsInMonth} <span className="text-xs font-normal text-slate-500">/ {conductors.length}</span>
               </div>
@@ -2333,7 +2333,7 @@ await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(r
             </div>
 
             <div className="card p-4 border-l-4 border-l-indigo-500">
-              <span className="text-[11px] font-semibold uppercase text-slate-400">Adunanze Totali Assegnate</span>
+              <span className="text-[11px] font-semibold text-slate-400">Adunanze Totali Assegnate</span>
               <div className="text-2xl font-black text-indigo-600 dark:text-indigo-400 mt-1">
                 {assignedMonthMeetings} <span className="text-xs font-normal text-slate-500">/ {totalMonthMeetings}</span>
               </div>
@@ -2343,7 +2343,7 @@ await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(r
             </div>
 
             <div className="card p-4 border-l-4 border-l-emerald-500">
-              <span className="text-[11px] font-semibold uppercase text-slate-400">Media Incarichi</span>
+              <span className="text-[11px] font-semibold text-slate-400">Media Incarichi</span>
               <div className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-1">
                 {activeConductorsInMonth > 0 ? (assignedMonthMeetings / activeConductorsInMonth).toFixed(1) : '0'}
               </div>

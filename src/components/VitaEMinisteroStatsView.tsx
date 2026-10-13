@@ -243,7 +243,7 @@ export function VitaEMinisteroStatsView({
             <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-100">
               Statistiche &amp; Rotazione Partecipanti
             </h2>
-            <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 font-bold uppercase tracking-wider">
+            <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/60 text-indigo-700 dark:text-indigo-300 font-bold">
               Regola Equità Attiva
             </span>
           </div>
@@ -447,7 +447,7 @@ export function VitaEMinisteroStatsView({
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse text-xs">
             <thead>
-              <tr className="bg-slate-50 dark:bg-slate-900/70 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider text-[11px]">
+              <tr className="bg-slate-50 dark:bg-slate-900/70 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400 font-bold text-[11px]">
                 <th className="py-3 px-3.5 w-14 text-center">#</th>
                 <th className="py-3 px-3.5">Proclamatore</th>
                 <th className="py-3 px-3.5">Ultima Assegnazione</th>

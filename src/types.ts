@@ -299,6 +299,40 @@ export interface VitaEMinisteroData {
   ministeroPartTypes?: MinisteroPartTypeDef[];
 }
 
+// Il territorio è il PDF in src/territori/: numero, nome e sezione vengono dal nome del file.
+export interface AssegnazioneTerritorio {
+  id: string;
+  numero: string; // "12", "35A"
+  proclamatore: string;
+  assegnato: string; // YYYY-MM-DD
+  rientro?: string;  // YYYY-MM-DD, assente finché il territorio è fuori
+}
+
+export interface TerritoriData {
+  assegnazioni: AssegnazioneTerritorio[];
+}
+
+// Oratori della congregazione che tengono il discorso pubblico in altre congregazioni.
+export interface OratoreEsterno {
+  personId?: string;
+  nome: string;
+  schemi: string[]; // titoli da TITOLI_DISCORSI_PUBBLICI che ha preparato
+}
+
+export interface UscitaDiscorso {
+  id: string;
+  data: string; // YYYY-MM-DD
+  orario?: string; // HH:MM, facoltativo per le uscite inserite prima
+  oratore: string;
+  titolo: string;
+  congregazione: string;
+}
+
+export interface DiscorsiEsterniData {
+  oratori: OratoreEsterno[];
+  uscite: UscitaDiscorso[];
+}
+
 export interface StateData {
   people: Person[];
   unavail: Record<string, string[]>; // { personId: ["YYYY-MM-DD", ...] }
@@ -314,6 +348,8 @@ export interface StateData {
   servizioCampo?: ServizioCampoData;
   vitaEMinistero?: VitaEMinisteroData;
   programResponsibles?: Partial<Record<ChecklistProgramKey, ProgramResponsible>>;
+  territori?: TerritoriData;
+  discorsiEsterni?: DiscorsiEsterniData;
 }
 
 export interface MensileRow {

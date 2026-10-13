@@ -50,11 +50,16 @@ import { LoginScreen } from './components/LoginScreen';
 import { OperaPubblicaView } from './components/OperaPubblicaView';
 import { ServizioCampoView } from './components/ServizioCampoView';
 import { VitaEMinisteroView } from './components/VitaEMinisteroView';
+import { TerritoriView } from './components/TerritoriView';
+import { DiscorsiEsterniView } from './components/DiscorsiEsterniView';
+import { normalizeDiscorsiEsterni } from './utils/discorsiEsterni';
+import { normalizeTerritori, alertTerritori } from './utils/territori';
 import { ModernSectionHub, SectionKey } from './components/ModernSectionHub';
 import { ModernSquareNavbar } from './components/ModernSquareNavbar';
+import { SECTION_META, accentStyle } from './components/sectionMeta';
 import { ExcelImportModal } from './components/ExcelImportModal';
 import { DEFAULT_VITA_MINISTERO_DATA } from './data/defaultVitaEMinistero';
-import { TITOLI_DISCORSI_PUBBLICI } from './data/titoliDiscorsiPubblici';
+import { SCHEMI_DISCORSI_PUBBLICI } from './data/titoliDiscorsiPubblici';
 import { auth } from './firebase';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 import {
@@ -108,8 +113,10 @@ function normalize(s: any): StateData {
   const servizioCampo = s.servizioCampo || { conductors: [], schedule: [], locations: [] };
   const vitaEMinistero = s.vitaEMinistero || DEFAULT_VITA_MINISTERO_DATA;
   const programResponsibles = s.programResponsibles && typeof s.programResponsibles === 'object' ? s.programResponsibles : {};
+  const territori = normalizeTerritori(s.territori);
+  const discorsiEsterni = normalizeDiscorsiEsterni(s.discorsiEsterni);
 
-  return syncRegistryLinks({ people, unavail, special, groups, mensileArchives, adminPin, viewerPin, operaPubblica, servizioCampo, vitaEMinistero, programResponsibles });
+  return syncRegistryLinks({ people, unavail, special, groups, mensileArchives, adminPin, viewerPin, operaPubblica, servizioCampo, vitaEMinistero, programResponsibles, territori, discorsiEsterni });
 }
 
 function loadInitialState(): StateData {
@@ -1563,6 +1570,8 @@ try {
     vitaEMinistero: 'Vita e ministero',
     servizioCampo: 'Servizio di campo',
     operaPubblica: 'Opera pubblica',
+    territori: 'Territori',
+    discorsiEsterni: 'Discorsi esterni',
     impostazioni: 'Assenze e calendario',
     statistiche: 'Statistiche',
   };
@@ -1579,18 +1588,22 @@ try {
 
   return (
     <div id="app" className="min-h-screen bg-slate-50 font-sans">
-      <div className="app-shell">
+      <div className="app-shell" style={accentStyle(activeTab)}>
         <ModernSquareNavbar
           activeTab={activeTab}
           onSelectTab={(tab) => setActiveTab(tab)}
           peopleCount={state.people.length}
+          territoriAlert={alertTerritori(normalizeTerritori(state.territori).assegnazioni).length}
         />
 
         <div className="app-main">
           <header className="app-topbar no-print">
-            <div className="min-w-0">
-              <div className="text-sm text-slate-500">Gestione Congregazione</div>
-              <div className="text-lg font-semibold text-slate-950 truncate">{activeSectionTitle[activeTab]}</div>
+            <div className="min-w-0 flex items-center gap-3">
+              {(() => { const Icon = SECTION_META[activeTab].icon; return <span className="app-topbar-icon" aria-hidden="true"><Icon className="w-5 h-5" /></span>; })()}
+              <div className="min-w-0">
+                <div className="text-sm text-slate-500">Gestione Congregazione</div>
+                <div className="text-lg font-semibold text-slate-950 truncate">{activeSectionTitle[activeTab]}</div>
+              </div>
             </div>
 
             <div className="flex items-center gap-2 sm:gap-3">
@@ -1651,7 +1664,6 @@ try {
         <section className="tab-panel no-print space-y-5">
           <div className="page-heading">
             <div>
-              <p className="page-eyebrow">Anagrafica</p>
               <h1 className="page-title">Persone</h1>
               <p className="page-description">Consulta le persone e gestisci le abilitazioni agli incarichi.</p>
             </div>
@@ -2116,7 +2128,6 @@ try {
         <section className="tab-panel space-y-5">
           <div className="page-heading no-print">
             <div>
-              <p className="page-eyebrow">Programmi</p>
               <h1 className="page-title">Programma mensile</h1>
               <p className="page-description">Genera e gestisci i turni di sala per il mese selezionato.</p>
             </div>
@@ -2265,7 +2276,7 @@ try {
                             <div className="flex items-center gap-2">
                               <span>{a.title}</span>
                               {isViewing && (
-                                <span className="text-[10px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300">
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900 text-indigo-700 dark:text-indigo-300">
                                   In visione
                                 </span>
                               )}
@@ -2415,7 +2426,6 @@ try {
         <section className="tab-panel space-y-5">
           <div className="page-heading no-print">
             <div>
-              <p className="page-eyebrow">Programmi</p>
               <h1 className="page-title">Adunanza domenica</h1>
               <p className="page-description">Pianifica oratore, titolo del discorso pubblico, presidente e lettore per le domeniche del mese.</p>
             </div>
@@ -2500,7 +2510,7 @@ try {
                 </div>
               </header>
               <datalist id="titoli-discorso-pubblico">
-                {TITOLI_DISCORSI_PUBBLICI.map((title, index) => <option key={index} value={title} />)}
+                {SCHEMI_DISCORSI_PUBBLICI.map(s => <option key={s.numero} value={s.titolo} label={`n. ${s.numero}`} />)}
               </datalist>
               <div className="weekend-program__weeks">
                 {domenicaProgramRows.map((row, index) => {
@@ -2540,7 +2550,6 @@ try {
         <section className="tab-panel no-print space-y-5">
           <div className="page-heading">
             <div>
-              <p className="page-eyebrow">Gestione</p>
               <h1 className="page-title">Assenze e calendario</h1>
               <p className="page-description">Registra indisponibilità e date speciali che influenzano la generazione dei programmi.</p>
             </div>
@@ -2909,6 +2918,28 @@ try {
         <OperaPubblicaView
           state={state}
           activePrograms={{ mensileRows: allMensileRows, domenicaRows: allDomenicaRows }}
+          onSaveState={saveState}
+          isAdmin={currentUser?.role === 'admin'}
+          onShowToast={showToast}
+          checkAdminPermission={checkAdminPermission}
+        />
+      )}
+
+      {/* ============ DISCORSI ESTERNI ============ */}
+      {activeTab === 'discorsiEsterni' && (
+        <DiscorsiEsterniView
+          state={state}
+          onSaveState={saveState}
+          isAdmin={currentUser?.role === 'admin'}
+          onShowToast={showToast}
+          checkAdminPermission={checkAdminPermission}
+        />
+      )}
+
+      {/* ============ TERRITORI ============ */}
+      {activeTab === 'territori' && (
+        <TerritoriView
+          state={state}
           onSaveState={saveState}
           isAdmin={currentUser?.role === 'admin'}
           onShowToast={showToast}

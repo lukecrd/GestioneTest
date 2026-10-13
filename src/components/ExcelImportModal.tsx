@@ -585,7 +585,7 @@ export const ExcelImportModal: React.FC<ExcelImportModalProps> = ({
           {fileName && headers.length > 0 && (
             <div className="bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 space-y-3">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                <span className="text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
                   <Users className="w-3.5 h-3.5 text-sky-600" />
                   Mappatura Colonne Excel
                 </span>

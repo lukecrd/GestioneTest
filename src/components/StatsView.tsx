@@ -355,7 +355,7 @@ export const StatsView: React.FC<StatsViewProps> = ({
               <Award className="w-5 h-5" />
             </div>
             <div>
-              <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
                 Totale Incarichi
               </div>
               <div className="text-xl font-bold text-slate-900 dark:text-slate-100 mt-0.5">
@@ -369,7 +369,7 @@ export const StatsView: React.FC<StatsViewProps> = ({
               <Users className="w-5 h-5" />
             </div>
             <div>
-              <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
                 Persone Attive
               </div>
               <div className="text-xl font-bold text-slate-900 dark:text-slate-100 mt-0.5">
@@ -383,7 +383,7 @@ export const StatsView: React.FC<StatsViewProps> = ({
               <TrendingUp className="w-5 h-5" />
             </div>
             <div>
-              <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
                 Media per Persona
               </div>
               <div className="text-xl font-bold text-slate-900 dark:text-slate-100 mt-0.5">
@@ -397,7 +397,7 @@ export const StatsView: React.FC<StatsViewProps> = ({
               <UserCheck className="w-5 h-5" />
             </div>
             <div>
-              <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              <div className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
                 Range (Min - Max)
               </div>
               <div className="text-xl font-bold text-slate-900 dark:text-slate-100 mt-0.5">

@@ -210,7 +210,7 @@ export function VitaEMinisteroWolModal({
             <div>
               <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
                 Sincronizza da wol.jw.org
-                <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/60 dark:text-indigo-300 font-semibold uppercase tracking-wider">
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700 dark:bg-indigo-900/60 dark:text-indigo-300 font-semibold">
                   WOL Ufficiale
                 </span>
               </h3>
@@ -242,7 +242,7 @@ export function VitaEMinisteroWolModal({
 
           {/* Anno Selector */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-1.5">
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">
               Anno di pubblicazione
             </label>
             <div className="relative">
@@ -271,7 +271,7 @@ export function VitaEMinisteroWolModal({
 
           {/* Modalità di Download */}
           <div>
-            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider mb-2">
+            <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-2">
               Cosa desideri scaricare?
             </label>
 
@@ -359,7 +359,7 @@ export function VitaEMinisteroWolModal({
 
           {/* Opzione Assegnatari (Preserve vs Overwrite) */}
           <div className="p-3.5 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700/80 space-y-2.5">
-            <div className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-300 uppercase tracking-wider">
+            <div className="flex items-center gap-2 text-xs font-bold text-slate-700 dark:text-slate-300">
               <ShieldCheck className="w-4 h-4 text-emerald-600" />
               Gestione Assegnatari già inseriti
             </div>

@@ -22,6 +22,8 @@ import {
   WomenWithLiteratureCartIcon,
 } from './SectionIcons';
 import { StateData, MensileRow, DomenicaRow, ChecklistProgramKey } from '../types';
+import { SECTION_META, accentStyle } from './sectionMeta';
+import { alertTerritori, normalizeTerritori } from '../utils/territori';
 
 export type SectionKey =
   | 'anagrafica'
@@ -30,6 +32,8 @@ export type SectionKey =
   | 'vitaEMinistero'
   | 'servizioCampo'
   | 'operaPubblica'
+  | 'territori'
+  | 'discorsiEsterni'
   | 'impostazioni'
   | 'statistiche';
 
@@ -143,6 +147,8 @@ export const ModernSectionHub: React.FC<ModernSectionHubProps> = ({
     { id: 'vitaEMinistero' as const, title: 'Vita e ministero', description: 'Parti, studenti, assistenti e rotazioni', icon: WomenTableDiscussionIcon },
     { id: 'servizioCampo' as const, title: 'Servizio di campo', description: 'Comitive, conduttori, orari e luoghi', icon: PreacherManWithBagIcon },
     { id: 'operaPubblica' as const, title: 'Opera pubblica', description: 'Turni espositori e disponibilità', icon: WomenWithLiteratureCartIcon },
+    { id: 'discorsiEsterni' as const, title: 'Discorsi esterni', description: 'Oratori, schemi preparati e uscite', icon: SECTION_META.discorsiEsterni.icon },
+    { id: 'territori' as const, title: 'Territori', description: 'Cartine, assegnazioni e scadenze', icon: SECTION_META.territori.icon },
     { id: 'statistiche' as const, title: 'Statistiche', description: 'Distribuzione incarichi e storico', icon: BarChart2 },
   ];
 
@@ -150,7 +156,6 @@ export const ModernSectionHub: React.FC<ModernSectionHubProps> = ({
     <section className="space-y-6 animate-fadeIn">
       <div className="page-heading">
         <div>
-          <p className="page-eyebrow">Panoramica</p>
           <h1 className="page-title">Dashboard</h1>
           <p className="page-description">Situazione operativa della congregazione e accesso rapido alle attività principali.</p>
         </div>
@@ -167,27 +172,47 @@ export const ModernSectionHub: React.FC<ModernSectionHubProps> = ({
       </div>
 
       <div className="grid grid-cols-2 xl:grid-cols-4 gap-3">
-        <button className="metric-card text-left" onClick={() => onSelectSection('anagrafica')}>
+        <button className="metric-card text-left" style={accentStyle('anagrafica', '--mod-color')} onClick={() => onSelectSection('anagrafica')}>
           <div className="metric-icon"><Users className="w-5 h-5" /></div>
           <div className="metric-value">{people}</div>
           <div className="metric-label">Persone in anagrafica</div>
         </button>
-        <button className="metric-card text-left" onClick={() => onSelectSection('mensile')}>
+        <button className="metric-card text-left" style={accentStyle('mensile', '--mod-color')} onClick={() => onSelectSection('mensile')}>
           <div className="metric-icon"><CheckCircle2 className="w-5 h-5" /></div>
           <div className="metric-value">{activePrograms}</div>
           <div className="metric-label">Righe programmi attivi</div>
         </button>
-        <button className="metric-card text-left" onClick={() => onSelectSection('impostazioni')}>
+        <button className="metric-card text-left" style={accentStyle('impostazioni', '--mod-color')} onClick={() => onSelectSection('impostazioni')}>
           <div className="metric-icon"><Clock className="w-5 h-5" /></div>
           <div className="metric-value">{unavailabilityCount}</div>
           <div className="metric-label">Indisponibilità registrate</div>
         </button>
-        <button className="metric-card text-left" onClick={() => onSelectSection('impostazioni')}>
+        <button className="metric-card text-left" style={accentStyle('impostazioni', '--mod-color')} onClick={() => onSelectSection('impostazioni')}>
           <div className="metric-icon"><CalendarClock className="w-5 h-5" /></div>
           <div className="metric-value">{specialCount}</div>
           <div className="metric-label">Date speciali</div>
         </button>
       </div>
+
+      {(() => {
+        const alert = alertTerritori(normalizeTerritori(state.territori).assegnazioni);
+        if (!alert.length) return null;
+        const scaduti = alert.filter(a => a.livello === 'scaduto').length;
+        return (
+          <div className={`status-banner ${scaduti ? '!border-rose-200 !bg-rose-50 !text-rose-800' : ''}`} role="alert">
+            <AlertTriangle className="w-5 h-5 shrink-0" />
+            <div className="flex-1">
+              <div className="font-semibold text-slate-900">Territori da far rientrare</div>
+              <div className="text-sm text-slate-600 mt-0.5">
+                {[scaduti && `${scaduti} ${scaduti === 1 ? 'scaduto' : 'scaduti'}`, alert.length - scaduti && `${alert.length - scaduti} in scadenza entro 30 giorni`].filter(Boolean).join(' e ')}.
+              </div>
+            </div>
+            <button className="btn-ghost shrink-0" onClick={() => onSelectSection('territori')}>
+              Apri <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        );
+      })()}
 
       {(people === 0 || (!menRows && !domRows)) && (
         <div className="status-banner">
@@ -322,13 +347,13 @@ export const ModernSectionHub: React.FC<ModernSectionHubProps> = ({
           {modules.map((module) => {
             const Icon = module.icon;
             return (
-              <button key={module.id} onClick={() => onSelectSection(module.id)} className="module-card group">
+              <button key={module.id} onClick={() => onSelectSection(module.id)} className="module-card group" style={accentStyle(module.id, '--mod-color')}>
                 <div className="module-icon"><Icon className="w-5 h-5" /></div>
                 <div className="min-w-0 flex-1 text-left">
                   <div className="font-semibold text-slate-900">{module.title}</div>
                   <div className="text-sm text-slate-500 mt-0.5">{module.description}</div>
                 </div>
-                <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-sky-700 group-hover:translate-x-0.5 transition" />
+                <ArrowRight className="module-arrow w-4 h-4 text-slate-400 group-hover:translate-x-0.5 transition" />
               </button>
             );
           })}
