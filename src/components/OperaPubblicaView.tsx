@@ -1777,7 +1777,7 @@ try {
                             {/* Quick Add Dropdown Checkboxes */}
                             {isAdmin && (
                               <div className="pt-2 border-t border-slate-200 dark:border-slate-700/80 space-y-2">
-                                <label className="block text-[10px] uppercase tracking-wider text-slate-500 font-bold">
+                                <label className="block text-[10px] text-slate-500 font-bold">
                                   Proclamatori disponibili (8-10):
                                 </label>
                                 <div className="flex flex-wrap gap-1 max-h-28 overflow-y-auto pr-1">
@@ -1921,7 +1921,7 @@ try {
                             {/* Quick Add Dropdown Checkboxes */}
                             {isAdmin && (
                               <div className="pt-2 border-t border-slate-200 dark:border-slate-700/80 space-y-2">
-                                <label className="block text-[10px] uppercase tracking-wider text-slate-500 font-bold">
+                                <label className="block text-[10px] text-slate-500 font-bold">
                                   Proclamatori disponibili (10-12):
                                 </label>
                                 <div className="flex flex-wrap gap-1 max-h-28 overflow-y-auto pr-1">
@@ -2570,7 +2570,7 @@ try {
             <div className="card p-4 flex flex-col justify-between border-l-4 border-l-purple-500">
               <div className="flex items-start justify-between">
                 <div>
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
                     Proclamatori Impiegati
                   </span>
                   <div className="text-2xl font-black text-slate-900 dark:text-slate-100 mt-1">
@@ -2603,7 +2603,7 @@ try {
             <div className="card p-4 flex flex-col justify-between border-l-4 border-l-indigo-500">
               <div className="flex items-start justify-between">
                 <div>
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
                     Turni Assegnati
                   </span>
                   <div className="text-2xl font-black text-indigo-600 dark:text-indigo-400 mt-1">
@@ -2624,7 +2624,7 @@ try {
             <div className="card p-4 flex flex-col justify-between border-l-4 border-l-pink-500">
               <div className="flex items-start justify-between">
                 <div>
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
                     Turni Fratelli / Sorelle
                   </span>
                   <div className="flex items-baseline gap-2 mt-1">
@@ -2663,7 +2663,7 @@ try {
             <div className="card p-4 flex flex-col justify-between border-l-4 border-l-emerald-500">
               <div className="flex items-start justify-between">
                 <div>
-                  <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
                     Turni per Luogo
                   </span>
                   <div className="flex items-baseline gap-2 mt-1">
@@ -2958,7 +2958,7 @@ try {
             <div className="card p-4 border border-amber-200 dark:border-amber-900/50 bg-amber-50/40 dark:bg-amber-950/20">
               <div className="flex items-center gap-2 mb-2">
                 <Info className="w-4 h-4 text-amber-600 dark:text-amber-400" />
-                <h3 className="text-xs font-bold text-amber-900 dark:text-amber-200 uppercase tracking-wide">
+                <h3 className="text-xs font-bold text-amber-900 dark:text-amber-200">
                   Proclamatori non ancora impiegati a {MESI[selectedMonth]} ({unusedParticipantsInMonth})
                 </h3>
               </div>

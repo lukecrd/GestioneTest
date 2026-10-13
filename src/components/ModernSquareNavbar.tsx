@@ -1,33 +1,20 @@
 import React, { useState } from 'react';
-import {
-  Users,
-  Calendar,
-  Clock,
-  BarChart2,
-  LayoutDashboard,
-  Menu,
-  X,
-  ChevronRight,
-} from 'lucide-react';
-import {
-  SpeakerPodiumIcon,
-  WomenTableDiscussionIcon,
-  PreacherManWithBagIcon,
-  WomenWithLiteratureCartIcon,
-} from './SectionIcons';
+import { Menu, X, ChevronRight } from 'lucide-react';
 import { SectionKey } from './ModernSectionHub';
+import { SECTION_META, accentStyle } from './sectionMeta';
 
 interface ModernSquareNavbarProps {
   activeTab: SectionKey | 'hub';
   onSelectTab: (tab: SectionKey | 'hub') => void;
   peopleCount: number;
+  territoriAlert: number; // scaduti + in scadenza entro 30 giorni
 }
 
 type NavItem = {
   id: SectionKey | 'hub';
   label: string;
-  icon: React.ComponentType<{ className?: string }>;
   badge?: number;
+  alert?: boolean;
   group?: 'main' | 'programmi' | 'servizio' | 'gestione';
 };
 
@@ -42,19 +29,22 @@ export const ModernSquareNavbar: React.FC<ModernSquareNavbarProps> = ({
   activeTab,
   onSelectTab,
   peopleCount,
+  territoriAlert,
 }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   const navItems: NavItem[] = [
-    { id: 'hub', label: 'Dashboard', icon: LayoutDashboard, group: 'main' },
-    { id: 'anagrafica', label: 'Persone', icon: Users, badge: peopleCount, group: 'main' },
-    { id: 'mensile', label: 'Programma mensile', icon: Calendar, group: 'programmi' },
-    { id: 'domenica', label: 'Adunanza domenica', icon: SpeakerPodiumIcon, group: 'programmi' },
-    { id: 'vitaEMinistero', label: 'Vita e ministero', icon: WomenTableDiscussionIcon, group: 'programmi' },
-    { id: 'servizioCampo', label: 'Servizio di campo', icon: PreacherManWithBagIcon, group: 'servizio' },
-    { id: 'operaPubblica', label: 'Opera pubblica', icon: WomenWithLiteratureCartIcon, group: 'servizio' },
-    { id: 'impostazioni', label: 'Assenze e calendario', icon: Clock, group: 'gestione' },
-    { id: 'statistiche', label: 'Statistiche', icon: BarChart2, group: 'gestione' },
+    { id: 'hub', label: 'Dashboard', group: 'main' },
+    { id: 'anagrafica', label: 'Persone', badge: peopleCount, group: 'main' },
+    { id: 'mensile', label: 'Programma mensile', group: 'programmi' },
+    { id: 'domenica', label: 'Adunanza domenica', group: 'programmi' },
+    { id: 'vitaEMinistero', label: 'Vita e ministero', group: 'programmi' },
+    { id: 'discorsiEsterni', label: 'Discorsi esterni', group: 'programmi' },
+    { id: 'servizioCampo', label: 'Servizio di campo', group: 'servizio' },
+    { id: 'operaPubblica', label: 'Opera pubblica', group: 'servizio' },
+    { id: 'territori', label: 'Territori', group: 'servizio', ...(territoriAlert ? { badge: territoriAlert, alert: true } : {}) },
+    { id: 'impostazioni', label: 'Assenze e calendario', group: 'gestione' },
+    { id: 'statistiche', label: 'Statistiche', group: 'gestione' },
   ];
 
   const select = (id: NavItem['id']) => {
@@ -68,7 +58,7 @@ export const ModernSquareNavbar: React.FC<ModernSquareNavbarProps> = ({
         <div key={group} className="app-nav-group">
           {groupLabels[group] && <div className="app-nav-group-label">{groupLabels[group]}</div>}
           {navItems.filter((item) => item.group === group).map((item) => {
-            const Icon = item.icon;
+            const Icon = SECTION_META[item.id].icon;
             const isActive = activeTab === item.id;
             return (
               <button
@@ -76,10 +66,17 @@ export const ModernSquareNavbar: React.FC<ModernSquareNavbarProps> = ({
                 type="button"
                 onClick={() => select(item.id)}
                 className={`app-nav-item ${isActive ? 'is-active' : ''}`}
+                style={accentStyle(item.id, '--nav-color')}
+                aria-current={isActive ? 'page' : undefined}
               >
-                <span className="app-nav-icon"><Icon className="w-[18px] h-[18px]" /></span>
+                <span className="app-nav-icon"><Icon className="w-4 h-4" /></span>
                 <span className="flex-1 truncate text-left">{item.label}</span>
-                {item.badge !== undefined && <span className="app-nav-badge">{item.badge}</span>}
+                {item.badge !== undefined && (
+                  <span className={`app-nav-badge ${item.alert ? 'is-alert' : ''}`} {...(item.alert ? { title: `${item.badge} territori scaduti o in scadenza` } : {})}>
+                    {item.badge}
+                    {item.alert && <span className="sr-only"> territori scaduti o in scadenza</span>}
+                  </span>
+                )}
                 {isActive && <ChevronRight className="w-4 h-4 opacity-70" />}
               </button>
             );
