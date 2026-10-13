@@ -1,3 +1,4 @@
+import { mensileWeekStart, mondayDates } from '../src/utils/mensileWeek.js';
 import { readFileSync } from 'node:fs';
 import ts from 'typescript';
 import test from 'node:test';
@@ -22,7 +23,7 @@ test('one identity across all five programmes and legacy names', () => {
     mensileRows: [{ date: new Date('2026-10-04T12:00:00'), ingresso: [' Luca ', '—'] }],
     domenicaRows: [{ date: new Date('2026-10-11T12:00:00'), lettore: 'LUCA' }],
   });
-  for (const date of ['2026-10-04', '2026-10-07', '2026-10-09', '2026-10-10', '2026-10-11', '2026-10-13']) {
+  for (const date of ['2026-10-07', '2026-10-09', '2026-10-10', '2026-10-11', '2026-10-13']) {
     assert.ok(ledger.isBusy({ personId: 'p', name: 'Renamed' }, date), date);
   }
   assert.equal(ledger.isBusy({ name: 'Luca' }, '2026-10-12'), false);
@@ -64,7 +65,7 @@ test('latest archived monthly row wins and active row overrides it', () => {
 });
 
 test('weekly dates include Wednesday across month boundaries', () => {
-  assert.deepEqual(weeklyDates('2026-05-31'), ['2026-05-31', '2026-06-03']);
+  assert.deepEqual(weeklyDates('2026-05-31'), ['2026-06-03', '2026-06-07']);
 });
 
 test('unavailability resolves both personId and legacy name', () => {
@@ -182,7 +183,7 @@ test('monthly generator leaves gaps instead of assigning duplicate roles or a pe
   let rows;
   invokeGenerator('src/App.tsx', 'generateMensile', {
     args: [2026, 9], state, menRows: null, allMensileRows: [], allDomenicaRows: null, domenicaProgramRows: null, checkAdminPermission: () => true,
-    sundayDates: () => [new Date('2026-10-04T12:00:00')], iso, addDays, weeklyDates, createSchedulingLedger,
+    mondayDates: () => [new Date('2026-10-05T12:00:00')], iso, addDays, weeklyDates, createSchedulingLedger,
     fairPick: (pool, counts, last, index, exclude) => pool.find(p => !exclude.includes(p.id)),
     markUsed: noop, consolePairValid: () => true, MESI: Array(12).fill('Mese'), fmtShort: iso,
     setMenTitle: noop, setMenRows: noop, setMenWarn: noop, setActiveArchiveId: noop, syncActivePrograms: value => { rows = value.menRows; },
@@ -191,13 +192,15 @@ test('monthly generator leaves gaps instead of assigning duplicate roles or a pe
   assert.equal(assigned.includes('A'), false);
   assert.equal(new Set(assigned).size, assigned.length);
   assert.equal(assigned.length, 3);
+  assert.equal(rows[0].date.getDay(), 1);
+  assert.equal(rows[0].date.getDate(), 5);
 });
 
 test('Sunday generation respects existing monthly roles and removes the fixed sample reader override', () => {
   const state = base({ people: ['A', 'B'].map(id => ({ ...person(id), roles: { presidentePubblica: true, lettore: true } })) });
   let rows;
   invokeGenerator('src/App.tsx', 'generateDomenica', {
-    args: [2026, 9], state, menRows: [], allMensileRows: [{ date: new Date('2026-10-11T12:00:00'), auditorium: 'A' }], allDomenicaRows: [], domenicaProgramRows: null,
+    args: [2026, 9], state, menRows: [], allMensileRows: [{ date: new Date('2026-10-05T12:00:00'), auditorium: 'A' }], allDomenicaRows: [], domenicaProgramRows: null,
     checkAdminPermission: () => true, sundayDates: () => [new Date('2026-10-11T12:00:00')],
     iso, addDays, createSchedulingLedger, OCTOBRE_2026_WEEKEND: { '2026-10-11': { lettore: 'A' } },
     fairPick: (pool, counts, last, index, exclude) => pool.find(p => !exclude.includes(p.id)),
@@ -264,4 +267,40 @@ test('ordinary Bible study and every VM role are assigned uniquely with eligible
   assert.deepEqual(result.warnings, []);
   assert.equal(result.meetings[0].studioBiblicoConductorId, 'P9');
   assert.equal(result.meetings[0].studioBiblicoReaderId, 'P10');
+});
+
+test('new monthly programmes start on each Monday in the selected month', () => {
+  assert.deepEqual(mondayDates(2026, 9).map(date => date.getDate()), [5, 12, 19, 26]);
+  assert.deepEqual(mondayDates(2026, 10).map(date => date.getDate()), [2, 9, 16, 23, 30]);
+  assert.ok(mondayDates(2026, 9).every(date => date.getDay() === 1));
+});
+
+test('legacy saved Sunday headings show the following Monday without changing the stored date', () => {
+  const original = new Date('2026-10-04T12:00:00');
+  const monday = mensileWeekStart(original);
+  assert.equal(original.getDay(), 0);
+  assert.equal(original.getDate(), 4);
+  assert.equal(monday.getDay(), 1);
+  assert.equal(monday.getDate(), 5);
+  assert.equal(mensileWeekStart(monday).getTime(), monday.getTime());
+});
+
+test('Monday weekly duties reserve Wednesday and the Sunday of the same week', () => {
+  assert.deepEqual(weeklyDates('2026-10-05'), ['2026-10-07', '2026-10-11']);
+  assert.equal(mensileWeekStart('2026-05-31').getMonth(), 5);
+  assert.equal(mensileWeekStart('2026-05-31').getDate(), 1);
+  const ledger = createSchedulingLedger(base(), { mensileRows: [{ date: new Date('2026-10-05T12:00:00'), auditorium: 'Prova' }] });
+  assert.ok(ledger.isBusy({ name: 'Prova' }, '2026-10-07'));
+  assert.ok(ledger.isBusy({ name: 'Prova' }, '2026-10-11'));
+  assert.equal(ledger.isBusy({ name: 'Prova' }, '2026-10-04'), false);
+  assert.equal(ledger.isBusy({ name: 'Prova' }, '2026-10-14'), false);
+});
+
+test('active Monday programme overrides a legacy Sunday archive for the same week', () => {
+  const ledger = createSchedulingLedger(base({ mensileArchives: [{ savedAt: '2026-10-01', rows: [
+    { dateStr: '2026-10-04', auditorium: 'Archivio vecchio' },
+  ] }] }), { mensileRows: [{ date: new Date('2026-10-05T12:00:00'), auditorium: 'Attivo nuovo' }] });
+  assert.ok(ledger.isBusy({ name: 'Attivo nuovo' }, '2026-10-07'));
+  assert.ok(ledger.isBusy({ name: 'Attivo nuovo' }, '2026-10-11'));
+  assert.equal(ledger.isBusy({ name: 'Archivio vecchio' }, '2026-10-07'), false);
 });

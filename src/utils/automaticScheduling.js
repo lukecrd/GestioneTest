@@ -1,3 +1,4 @@
+import { mensileWeekStart } from './mensileWeek';
 import { personNameKey } from './peopleRegistry';
 import { inferPartTypeIds, isParticipantEligibleForPartTypes } from './ministeroPartTypes';
 
@@ -11,11 +12,13 @@ export function dateKey(value) {
 }
 
 export function weeklyDates(value) {
-  const sunday = dateKey(value);
-  if (!sunday) return [];
-  const wednesday = new Date(sunday + 'T12:00:00');
-  wednesday.setDate(wednesday.getDate() + 3);
-  return [sunday, dateKey(wednesday)];
+  const monday = mensileWeekStart(value);
+  if (Number.isNaN(monday.getTime())) return [];
+  const wednesday = new Date(monday.getTime());
+  const sunday = new Date(monday.getTime());
+  wednesday.setDate(wednesday.getDate() + 2);
+  sunday.setDate(sunday.getDate() + 6);
+  return [dateKey(wednesday), dateKey(sunday)];
 }
 
 /**
@@ -77,8 +80,8 @@ export function createSchedulingLedger(state, programs = {}, excluded = {}) {
   // Most recently saved archive wins; the active programme overrides its dates.
   const monthlyRows = new Map();
   [...(state.mensileArchives || [])].sort((a, b) => (a.savedAt || '').localeCompare(b.savedAt || '')).forEach(archive =>
-    (archive.rows || []).forEach(row => monthlyRows.set(row.dateStr, row)));
-  (programs.mensileRows || []).forEach(row => monthlyRows.set(dateKey(row.date), row));
+    (archive.rows || []).forEach(row => monthlyRows.set(dateKey(mensileWeekStart(row.dateStr)), row)));
+  (programs.mensileRows || []).forEach(row => monthlyRows.set(dateKey(mensileWeekStart(row.date)), row));
   monthlyRows.forEach(monthly);
   (programs.domenicaRows || []).forEach(row => {
     if (row.special || row.placeholder) return;
