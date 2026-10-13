@@ -1,3 +1,4 @@
+import { mensileWeekStart, mondayDates } from './utils/mensileWeek';
 import { normalizeMensilePrograms, legacyMensileProgram, mergeMensilePrograms, serializeMensilePrograms, updateMensilePeriod, clearMensilePrograms } from './utils/mensilePrograms';
 import { domenicaPeriodKey, normalizeDomenicaPrograms, selectDomenicaProgram, readProgramSelection, legacyDomenicaProgram, mergeDomenicaPrograms, serializeDomenicaPrograms, updateDomenicaPeriod, clearDomenicaPrograms } from './utils/domenicaPrograms';
 import { createSchedulingLedger, weeklyDates } from './utils/automaticScheduling';
@@ -702,9 +703,9 @@ export default function App() {
 
   const generateMensile = (y: number, m: number) => {
     if (!checkAdminPermission()) return;
-    const sundays = sundayDates(y, m);
+    const mondays = mondayDates(y, m);
     const ledger = createSchedulingLedger(state, { mensileRows: allMensileRows, domenicaRows: allDomenicaRows }, {
-      program: 'mensile', dates: sundays.flatMap(sunday => weeklyDates(sunday)),
+      program: 'mensile', dates: mondays.flatMap(monday => weeklyDates(monday)),
     });
     const uscieriPool = state.people.filter(p => p.roles.uscieri);
     const micPool = state.people.filter(p => p.roles.microfoni);
@@ -724,16 +725,14 @@ export default function App() {
     if (consolePool.length < 2) warnings.push('Servono almeno 2 persone per Audio/Video (console).');
 
     const rows: MensileRow[] = [];
-    sundays.forEach((sun, idx) => {
-      const wed = addDays(sun, 3);
-      const key = iso(sun);
-
-      if (state.special[key]) {
-        rows.push({ date: sun, special: state.special[key] });
+    mondays.forEach((monday, idx) => {
+      const special = state.special[iso(monday)] || state.special[iso(addDays(monday, 6))];
+      if (special) {
+        rows.push({ date: monday, special });
         return;
       }
 
-      const dates = weeklyDates(sun);
+      const dates = weeklyDates(monday);
       const unavailIds = state.people.filter(p => ledger.isUnavailable(p, dates) || ledger.isBusy(p, dates)).map(p => p.id);
 
       const chosenUsc: Person[] = [];
@@ -781,13 +780,13 @@ export default function App() {
       if (chosenUsc.length < 3) missing.push(`${3 - chosenUsc.length} uscieri`);
       if (chosenMic.length < 2) missing.push(`${2 - chosenMic.length} microfonisti`);
       if (!c1 || !c2) missing.push(`${2 - Number(!!c1) - Number(!!c2)} audio/video`);
-      if (missing.length) warnings.push(`Settimana del ${fmtShort(sun)}: da assegnare ${missing.join(', ')}. Nessun nominativo idoneo libero.`);
+      if (missing.length) warnings.push(`Settimana del ${fmtShort(monday)}: da assegnare ${missing.join(', ')}. Nessun nominativo idoneo libero.`);
 
       const riassetto = riassGroups[ri % riassGroups.length]; ri++;
       const pulizie = pulGroups[pi % pulGroups.length]; pi++;
 
       const row: MensileRow = {
-        date: sun,
+        date: monday,
         ingresso: [chosenUsc[0]?.name || '—', chosenUsc[1]?.name || '—'],
         auditorium: chosenUsc[2]?.name || '—',
         microfoni: [chosenMic[0]?.name || '—', chosenMic[1]?.name || '—'],
@@ -817,7 +816,7 @@ export default function App() {
       Object.entries(nameMap).forEach(([name, rolesList]) => {
         if (rolesList.length > 1) {
           duplicates.push(name);
-          rowWarns.push(`${name} è assegnato/a a più ruoli (${rolesList.join(', ')}) nella settimana del ${fmtShort(sun)}.`);
+          rowWarns.push(`${name} è assegnato/a a più ruoli (${rolesList.join(', ')}) nella settimana del ${fmtShort(monday)}.`);
         }
       });
 
@@ -866,7 +865,7 @@ export default function App() {
     Object.entries(nameMap).forEach(([name, rolesList]) => {
       if (rolesList.length > 1) {
         duplicates.push(name);
-        warnings.push(`${name} è assegnato/a a più ruoli (${rolesList.join(', ')}) nella settimana del ${fmtShort(row.date)}.`);
+        warnings.push(`${name} è assegnato/a a più ruoli (${rolesList.join(', ')}) nella settimana del ${fmtShort(mensileWeekStart(row.date))}.`);
       }
     });
 
@@ -974,13 +973,13 @@ try {
 
     menRows.forEach(r => {
       if (r.special) {
-        rows.push([fmtShort(r.date), r.special, '', '', '', '', '']);
+        rows.push([fmtShort(mensileWeekStart(r.date)), r.special, '', '', '', '', '']);
       } else {
         const ing = (r.ingresso || []).filter(Boolean).join(' — ');
         const mic = (r.microfoni || []).filter(Boolean).join(' — ');
         const av = (r.audioVideo || []).filter(Boolean).join(' — ');
         rows.push([
-          fmtShort(r.date),
+          fmtShort(mensileWeekStart(r.date)),
           ing || '---',
           r.auditorium || '---',
           mic || '---',
@@ -2191,8 +2190,8 @@ try {
                     if (!menRows) return;
                     const header = ['Settimana del', 'Uscieri ingresso 1', 'Uscieri ingresso 2', 'Usciere Auditorium', 'Microfonista 1', 'Microfonista 2', 'Audio/Video 1', 'Audio/Video 2', 'Riassetto', 'Pulizie'];
                     const data = menRows.map(r => r.special
-                      ? [fmtShort(r.date), r.special, '', '', '', '', '', '', '', '']
-                      : [fmtShort(r.date), r.ingresso?.[0], r.ingresso?.[1], r.auditorium, r.microfoni?.[0], r.microfoni?.[1], r.audioVideo?.[0], r.audioVideo?.[1], r.riassetto, r.pulizie]);
+                      ? [fmtShort(mensileWeekStart(r.date)), r.special, '', '', '', '', '', '', '', '']
+                      : [fmtShort(mensileWeekStart(r.date)), r.ingresso?.[0], r.ingresso?.[1], r.auditorium, r.microfoni?.[0], r.microfoni?.[1], r.audioVideo?.[0], r.audioVideo?.[1], r.riassetto, r.pulizie]);
                     downloadCsv('programma_mensile_' + menTitle.replace(/\s+/g, '_') + '.csv', header, data);
                   }}
                   className="btn-ghost text-slate-500 text-xs"
@@ -2361,7 +2360,7 @@ try {
                         return (
                           <React.Fragment key={i}>
                             <tr className="special-row">
-                              <td className="week-cell">{fmtShort(r.date)}</td>
+                              <td className="week-cell">{fmtShort(mensileWeekStart(r.date))}</td>
                               <td colSpan={6}>{r.special}</td>
                             </tr>
                             {i < menRows.length - 1 && (
@@ -2380,7 +2379,7 @@ try {
                                 {hasDup && (
                                   <span className="text-amber-600 font-bold text-sm" title={r.warnings?.join('\n')}>⚠</span>
                                 )}
-                                <span>{fmtShort(r.date)}</span>
+                                <span>{fmtShort(mensileWeekStart(r.date))}</span>
                               </div>
                             </td>
                             <td>{renderMensileCell(i, 'ingresso0', r.ingresso?.[0], uscieriOptions, r.duplicates)}</td>
