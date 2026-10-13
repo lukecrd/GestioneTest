@@ -34,6 +34,7 @@ export type SectionKey =
   | 'operaPubblica'
   | 'territori'
   | 'discorsiEsterni'
+  | 'utenti'
   | 'impostazioni'
   | 'statistiche';
 

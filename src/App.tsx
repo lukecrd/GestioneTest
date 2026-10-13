@@ -46,7 +46,9 @@ import {
 } from 'lucide-react';
 import { Person, StateData, MensileRow, DomenicaRow, DomenicaMonthProgram, MensileMonthProgram, ArchivedProgram, AuthUser, ChecklistProgramKey } from './types';
 import { StatsView } from './components/StatsView';
-import { LoginScreen } from './components/LoginScreen';
+import { UtentiView } from './components/UtentiView';
+import { ascoltaUtenti, ProfiloUtente } from './lib/utenti';
+import { contaInAttesa } from './utils/utenti';
 import { OperaPubblicaView } from './components/OperaPubblicaView';
 import { ServizioCampoView } from './components/ServizioCampoView';
 import { VitaEMinisteroView } from './components/VitaEMinisteroView';
@@ -61,7 +63,6 @@ import { ExcelImportModal } from './components/ExcelImportModal';
 import { DEFAULT_VITA_MINISTERO_DATA } from './data/defaultVitaEMinistero';
 import { SCHEMI_DISCORSI_PUBBLICI } from './data/titoliDiscorsiPubblici';
 import { auth } from './firebase';
-import { onAuthStateChanged, signOut } from 'firebase/auth';
 import {
   subscribeToCongregation,
   pushStateToFirestore,
@@ -107,8 +108,6 @@ function normalize(s: any): StateData {
     });
   });
 
-  const adminPin = typeof s.adminPin === 'string' && s.adminPin.trim() ? s.adminPin.trim() : '1122';
-  const viewerPin = typeof s.viewerPin === 'string' && s.viewerPin.trim() ? s.viewerPin.trim() : '1234';
   const operaPubblica = s.operaPubblica || { participants: [], schedule: [] };
   const servizioCampo = s.servizioCampo || { conductors: [], schedule: [], locations: [] };
   const vitaEMinistero = s.vitaEMinistero || DEFAULT_VITA_MINISTERO_DATA;
@@ -116,7 +115,7 @@ function normalize(s: any): StateData {
   const territori = normalizeTerritori(s.territori);
   const discorsiEsterni = normalizeDiscorsiEsterni(s.discorsiEsterni);
 
-  return syncRegistryLinks({ people, unavail, special, groups, mensileArchives, adminPin, viewerPin, operaPubblica, servizioCampo, vitaEMinistero, programResponsibles, territori, discorsiEsterni });
+  return syncRegistryLinks({ people, unavail, special, groups, mensileArchives, operaPubblica, servizioCampo, vitaEMinistero, programResponsibles, territori, discorsiEsterni });
 }
 
 function loadInitialState(): StateData {
@@ -184,31 +183,21 @@ function downloadCsv(filename: string, header: string[], rows: (string | undefin
   triggerDownload(blob, filename);
 }
 
-export default function App() {
+// L'utente arriva già approvato da AuthGate: il ruolo viene dal profilo in Firestore, protetto dalle regole.
+export default function App({ utente, onEsci }: { utente: AuthUser; onEsci: () => void }) {
   const [state, setState] = useState<StateData>(loadInitialState);
   const [activeTab, setActiveTab] = useState<SectionKey | 'hub'>('hub');
 
-  // User Authentication State
-  const [currentUser, setCurrentUser] = useState<AuthUser | null>(() => {
-    try {
-      const saved = storage.get('congregation_auth_user');
-      if (saved) return JSON.parse(saved);
-    } catch (e) {}
-    return null;
-  });
+  const currentUser: AuthUser = utente;
+  const [dbVuoto, setDbVuoto] = useState(false);
+  const handleLogout = onEsci;
 
-  const handleLoginSuccess = (user: AuthUser) => {
-    setCurrentUser(user);
-    storage.set('congregation_auth_user', JSON.stringify(user));
-    showToast(`Accesso effettuato (${user.role === 'admin' ? 'Amministratore' : 'Solo Lettura'})`);
-  };
-
-  const handleLogout = () => {
-    signOut(auth).catch(() => {});
-    setCurrentUser(null);
-    storage.set('congregation_auth_user', '');
-    showToast('Disconnessione effettuata');
-  };
+  // Elenco utenti solo per gli amministratori (le regole lo negano agli altri).
+  const [utenti, setUtenti] = useState<ProfiloUtente[]>([]);
+  useEffect(() => {
+    if (currentUser.role !== 'admin') return;
+    return ascoltaUtenti(setUtenti, err => console.warn('Elenco utenti non disponibile:', err));
+  }, [currentUser.role]);
 
   const checkAdminPermission = (): boolean => {
     if (currentUser?.role === 'viewer') {
@@ -324,6 +313,7 @@ export default function App() {
 
     const unsubscribeData = subscribeToCongregation(
       ({ state: remoteState, activePrograms: remotePrograms }) => {
+        setDbVuoto(false);
         if (remoteState && Array.isArray(remoteState.people)) {
           const norm = normalize(remoteState);
           setState(norm);
@@ -360,27 +350,16 @@ export default function App() {
         console.warn('Firestore subscription error:', error);
         setSyncMsg('Offline — Dati salvati in locale');
         setSyncClass('text-amber-600');
+      },
+      () => {
+        setDbVuoto(true);
+        setSyncMsg('Database vuoto');
+        setSyncClass('text-amber-600');
       }
     );
 
-    const unsubscribeAuth = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser) {
-        if (!currentUser) {
-          const u: AuthUser = {
-            uid: firebaseUser.uid,
-            email: firebaseUser.email || undefined,
-            displayName: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'Utente Cloud',
-            role: 'admin',
-          };
-          setCurrentUser(u);
-          storage.set('congregation_auth_user', JSON.stringify(u));
-        }
-      }
-    });
-
     return () => {
       unsubscribeData();
-      unsubscribeAuth();
     };
   }, []);
 
@@ -1488,9 +1467,26 @@ try {
   };
 
   // Import / Export JSON
+  // Backup completo: lo stato da solo non contiene i programmi mensili e domenicali.
   const handleExportData = () => {
-    const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
-    triggerDownload(blob, 'dati_congregazione.json');
+    const backup = {
+      formato: 'gestione-congregazione-backup',
+      versione: 2,
+      esportatoIl: new Date().toISOString(),
+      state,
+      menPrograms: serializeMensilePrograms(menProgramsRef.current),
+      domPrograms: serializeDomenicaPrograms(domProgramsRef.current),
+    };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+    triggerDownload(blob, `backup_congregazione_${new Date().toISOString().slice(0, 10)}.json`);
+  };
+
+  // Primo caricamento nel database (vuoto) dei dati salvati in questo browser.
+  const caricaDatiLocali = () => {
+    if (!checkAdminPermission()) return;
+    saveState(state);
+    syncActivePrograms({ menPrograms: menProgramsRef.current, domPrograms: domProgramsRef.current });
+    showToast(`Caricati nel database: ${state.people.length} persone, ${Object.keys(menProgramsRef.current).length} programmi mensili, ${Object.keys(domProgramsRef.current).length} domenicali`);
   };
 
   const handleImportData = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1510,14 +1506,24 @@ try {
         showToast('File non è un JSON valido');
         return;
       }
-      if (!data || !Array.isArray(data.people)) {
+      // Formato nuovo (backup completo) o vecchio (solo lo stato).
+      const completo = data?.formato === 'gestione-congregazione-backup';
+      const statoImportato = completo ? data.state : data;
+      if (!statoImportato || !Array.isArray(statoImportato.people)) {
         showToast('File non valido: manca l\'anagrafica');
         return;
       }
       try {
-        const norm = normalize(data);
+        const norm = normalize(statoImportato);
         saveState(norm);
-        showToast('Dati importati: ' + norm.people.length + ' persone');
+        if (completo) {
+          const men = normalizeMensilePrograms(data.menPrograms || {});
+          const dom = normalizeDomenicaPrograms(data.domPrograms || {});
+          persistMensilePrograms(men);
+          persistDomenicaPrograms(dom);
+          syncActivePrograms({ menPrograms: men, domPrograms: dom });
+        }
+        showToast('Dati importati: ' + norm.people.length + ' persone' + (completo ? ' e programmi' : ''));
       } catch (err: any) {
         showToast('Errore nell\'applicare i dati: ' + (err?.message || err));
       }
@@ -1572,19 +1578,10 @@ try {
     operaPubblica: 'Opera pubblica',
     territori: 'Territori',
     discorsiEsterni: 'Discorsi esterni',
+    utenti: 'Utenti',
     impostazioni: 'Assenze e calendario',
     statistiche: 'Statistiche',
   };
-
-  if (!currentUser) {
-    return (
-      <LoginScreen
-        onLoginSuccess={handleLoginSuccess}
-        adminPin={state.adminPin || '1122'}
-        viewerPin={state.viewerPin || '1234'}
-      />
-    );
-  }
 
   return (
     <div id="app" className="min-h-screen bg-slate-50 font-sans">
@@ -1594,6 +1591,7 @@ try {
           onSelectTab={(tab) => setActiveTab(tab)}
           peopleCount={state.people.length}
           territoriAlert={alertTerritori(normalizeTerritori(state.territori).assegnazioni).length}
+          utentiInAttesa={currentUser.role === 'admin' ? contaInAttesa(utenti) : null}
         />
 
         <div className="app-main">
@@ -2757,54 +2755,6 @@ try {
 
             <div className="card md:col-span-2">
               <div className="flex items-center gap-2 mb-1 pb-2 border-b border-slate-100 dark:border-slate-800">
-                <ShieldCheck className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                <h2 className="card-title">Sicurezza & Codici PIN Accesso</h2>
-              </div>
-              <p className="text-slate-500 dark:text-slate-400 text-xs mt-1">
-                Personalizza i codici PIN di accesso per la tua congregazione. I PIN aggiornati vengono salvati nel Cloud in tempo reale.
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-                <div className="flex flex-col gap-1">
-                  <label className="lbl">PIN Amministratore (Lettura & Scrittura)</label>
-                  <input
-                    type="password"
-                    inputMode="numeric"
-                    autoComplete="new-password"
-                    maxLength={10}
-                    value={state.adminPin || '1122'}
-                    disabled={currentUser?.role !== 'admin'}
-                    onChange={e => {
-                      if (!checkAdminPermission()) return;
-                      saveState({ ...state, adminPin: e.target.value.trim() });
-                    }}
-                    className="inp font-mono text-center tracking-widest font-bold"
-                    placeholder="1122"
-                  />
-                  <span className="text-[11px] text-slate-400">Permette la gestione completa di anagrafica e programmi.</span>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <label className="lbl">PIN Consultazione (Solo Lettura)</label>
-                  <input
-                    type="password"
-                    inputMode="numeric"
-                    autoComplete="new-password"
-                    maxLength={10}
-                    value={state.viewerPin || '1234'}
-                    disabled={currentUser?.role !== 'admin'}
-                    onChange={e => {
-                      if (!checkAdminPermission()) return;
-                      saveState({ ...state, viewerPin: e.target.value.trim() });
-                    }}
-                    className="inp font-mono text-center tracking-widest font-bold"
-                    placeholder="1234"
-                  />
-                  <span className="text-[11px] text-slate-400">Permette la sola visualizzazione e la stampa dei programmi.</span>
-                </div>
-              </div>
-            </div>
-
-            <div className="card md:col-span-2">
-              <div className="flex items-center gap-2 mb-1 pb-2 border-b border-slate-100 dark:border-slate-800">
                 <Settings className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
                 <h2 className="card-title">Rotazione gruppi</h2>
               </div>
@@ -2923,6 +2873,27 @@ try {
           onShowToast={showToast}
           checkAdminPermission={checkAdminPermission}
         />
+      )}
+
+      {dbVuoto && currentUser.role === 'admin' && (
+        <div className="status-banner mb-6 no-print" role="alert">
+          <AlertTriangle className="w-5 h-5 shrink-0" />
+          <div className="flex-1">
+            <div className="font-semibold text-slate-900">Il database è vuoto</div>
+            <div className="text-sm text-slate-600 mt-0.5">
+              In questo browser ci sono dati salvati: {state.people.length} persone, {Object.keys(menPrograms).length} programmi mensili e {Object.keys(domPrograms).length} domenicali.
+              Caricali nel database perché tutti li vedano. Fallo dal browser con i dati più aggiornati.
+            </div>
+          </div>
+          <button type="button" className="btn-primary shrink-0" onClick={caricaDatiLocali} disabled={!state.people.length}>
+            Carica nel database
+          </button>
+        </div>
+      )}
+
+      {/* ============ UTENTI (solo amministratori) ============ */}
+      {activeTab === 'utenti' && currentUser.role === 'admin' && (
+        <UtentiView utenti={utenti} mioUid={currentUser.uid} onShowToast={showToast} />
       )}
 
       {/* ============ DISCORSI ESTERNI ============ */}

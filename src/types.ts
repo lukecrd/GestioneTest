@@ -5,7 +5,6 @@ export interface AuthUser {
   email?: string | null;
   displayName?: string | null;
   role: UserRole;
-  isAnonymousPIN?: boolean;
 }
 
 export interface PersonRoles {
@@ -342,8 +341,6 @@ export interface StateData {
     pulizie: string;   // 'Massa' | '1' | '2' | '3' | '4'
   };
   mensileArchives?: ArchivedProgram[];
-  adminPin?: string;
-  viewerPin?: string;
   operaPubblica?: OperaPubblicaData;
   servizioCampo?: ServizioCampoData;
   vitaEMinistero?: VitaEMinisteroData;

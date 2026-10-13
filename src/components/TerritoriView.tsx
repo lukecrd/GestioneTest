@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { FileText, Trash2, Undo2, Map as MapIcon, AlertTriangle, UserPlus } from 'lucide-react';
+import { FileText, Trash2, Undo2, Map as MapIcon, AlertTriangle, UserPlus, Printer } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from 'recharts';
 import { StateData, AssegnazioneTerritorio, TerritoriData } from '../types';
 import {
@@ -16,6 +16,7 @@ import {
   raggruppaSezioni,
   dettaglioInSezione,
 } from '../utils/territori';
+import { ModuloS13 } from './ModuloS13';
 
 interface TerritoriViewProps {
   state: StateData;
@@ -169,6 +170,7 @@ export const TerritoriView: React.FC<TerritoriViewProps> = ({ state, onSaveState
   const [assegnaNome, setAssegnaNome] = useState('');
   const [assegnaData, setAssegnaData] = useState(oggi);
   const [sezioneGrafici, setSezioneGrafici] = useState('');
+  const [mostraS13, setMostraS13] = useState(false);
 
   const save = (next: TerritoriData) => onSaveState({ ...state, territori: next });
 
@@ -239,6 +241,8 @@ export const TerritoriView: React.FC<TerritoriViewProps> = ({ state, onSaveState
 
   const colonne = isAdmin ? 4 : 3;
 
+  if (mostraS13) return <ModuloS13 territori={territori} assegnazioni={assegnazioni} onChiudi={() => setMostraS13(false)} />;
+
   return (
     <section className="space-y-6 animate-fadeIn">
       <div className="page-heading">
@@ -248,6 +252,9 @@ export const TerritoriView: React.FC<TerritoriViewProps> = ({ state, onSaveState
             Archivio delle cartine e assegnazioni ai proclamatori. Ogni territorio va riconsegnato entro {MESI_SCADENZA} mesi.
           </p>
         </div>
+        <button type="button" className="btn-ghost no-print shrink-0" onClick={() => setMostraS13(true)}>
+          <Printer className="w-4 h-4" /> Modulo S-13
+        </button>
       </div>
 
       {alert.length > 0 && (

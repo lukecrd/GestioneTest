@@ -59,7 +59,8 @@ export interface ActiveProgramsData {
 
 export function subscribeToCongregation(
   onUpdate: (data: { state?: StateData; activePrograms?: ActiveProgramsData }) => void,
-  onError: (err: any) => void
+  onError: (err: any) => void,
+  onVuoto?: () => void
 ) {
   return onSnapshot(
     DOC_REF,
@@ -91,6 +92,8 @@ export function subscribeToCongregation(
         }
 
         onUpdate(result);
+      } else {
+        onVuoto?.();
       }
     },
     (error) => {
