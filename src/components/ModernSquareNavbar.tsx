@@ -8,6 +8,7 @@ interface ModernSquareNavbarProps {
   onSelectTab: (tab: SectionKey | 'hub') => void;
   peopleCount: number;
   territoriAlert: number; // scaduti + in scadenza entro 30 giorni
+  utentiInAttesa: number | null; // null: non amministratore, la voce Utenti non compare
 }
 
 type NavItem = {
@@ -30,6 +31,7 @@ export const ModernSquareNavbar: React.FC<ModernSquareNavbarProps> = ({
   onSelectTab,
   peopleCount,
   territoriAlert,
+  utentiInAttesa,
 }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -45,6 +47,9 @@ export const ModernSquareNavbar: React.FC<ModernSquareNavbarProps> = ({
     { id: 'territori', label: 'Territori', group: 'servizio', ...(territoriAlert ? { badge: territoriAlert, alert: true } : {}) },
     { id: 'impostazioni', label: 'Assenze e calendario', group: 'gestione' },
     { id: 'statistiche', label: 'Statistiche', group: 'gestione' },
+    ...(utentiInAttesa !== null
+      ? [{ id: 'utenti' as const, label: 'Utenti', group: 'gestione' as const, ...(utentiInAttesa ? { badge: utentiInAttesa, alert: true } : {}) }]
+      : []),
   ];
 
   const select = (id: NavItem['id']) => {
@@ -72,9 +77,9 @@ export const ModernSquareNavbar: React.FC<ModernSquareNavbarProps> = ({
                 <span className="app-nav-icon"><Icon className="w-4 h-4" /></span>
                 <span className="flex-1 truncate text-left">{item.label}</span>
                 {item.badge !== undefined && (
-                  <span className={`app-nav-badge ${item.alert ? 'is-alert' : ''}`} {...(item.alert ? { title: `${item.badge} territori scaduti o in scadenza` } : {})}>
+                  <span className={`app-nav-badge ${item.alert ? 'is-alert' : ''}`} {...(item.alert ? { title: item.id === 'utenti' ? `${item.badge} richieste da approvare` : `${item.badge} territori scaduti o in scadenza` } : {})}>
                     {item.badge}
-                    {item.alert && <span className="sr-only"> territori scaduti o in scadenza</span>}
+                    {item.alert && <span className="sr-only">{item.id === 'utenti' ? ' richieste da approvare' : ' territori scaduti o in scadenza'}</span>}
                   </span>
                 )}
                 {isActive && <ChevronRight className="w-4 h-4 opacity-70" />}

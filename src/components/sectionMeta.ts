@@ -1,5 +1,5 @@
 import React from 'react';
-import { Users, Calendar, Clock, BarChart2, LayoutDashboard, Map as MapIcon, Megaphone } from 'lucide-react';
+import { Users, Calendar, Clock, BarChart2, LayoutDashboard, Map as MapIcon, Megaphone, UserCog } from 'lucide-react';
 import { SpeakerPodiumIcon, WomenTableDiscussionIcon, PreacherManWithBagIcon, WomenWithLiteratureCartIcon } from './SectionIcons';
 import type { SectionKey } from './ModernSectionHub';
 
@@ -17,6 +17,7 @@ export const SECTION_META: Record<SectionKey | 'hub', { color: string; icon: Rea
   territori: { color: '#2b7a3b', icon: MapIcon },
   impostazioni: { color: '#4c5a6b', icon: Clock },
   statistiche: { color: '#3b4cca', icon: BarChart2 },
+  utenti: { color: '#7a4b12', icon: UserCog },
 };
 
 // Da usare come style: espone il colore alle regole CSS (.app-nav-icon, .module-icon, …).

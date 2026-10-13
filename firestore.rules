@@ -1,10 +1,64 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // Solo account con email verificata: impedisce di registrarsi con l'indirizzo di un altro.
+    function autenticato() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+
+    function profilo() {
+      return get(/databases/$(database)/documents/utenti/$(request.auth.uid)).data;
+    }
+
+    function haProfilo() {
+      return exists(/databases/$(database)/documents/utenti/$(request.auth.uid));
+    }
+
+    function membro() {
+      return autenticato() && haProfilo() && profilo().ruolo in ['viewer', 'admin'];
+    }
+
+    function amministratore() {
+      return autenticato() && haProfilo() && profilo().ruolo == 'admin';
+    }
+
+    // ⚠ PRIMO AMMINISTRATORE: stessa email di EMAIL_AMMINISTRATORE_INIZIALE in src/lib/utenti.ts.
+    function amministratoreIniziale() {
+      return request.auth.token.email == 'luca.cardelli@gmail.com';
+    }
+
+    // Dati della congregazione: li legge chi è approvato, li modifica solo un amministratore.
     match /congregationData/{docId} {
-      // Access is limited to authenticated sessions. Role-level write protection
-      // should be enforced with Firebase custom claims in a subsequent step.
-      allow read, write: if request.auth != null;
+      allow read: if membro();
+      allow write: if amministratore();
+    }
+
+    match /utenti/{uid} {
+      allow read: if autenticato() && (request.auth.uid == uid || amministratore());
+
+      // Ognuno crea solo il proprio profilo, con la propria email, e sempre "in attesa"
+      // (tranne il primo amministratore).
+      allow create: if autenticato()
+        && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['email', 'nome', 'ruolo', 'creato'])
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.nome is string
+        && request.resource.data.nome.size() <= 80
+        && (request.resource.data.ruolo == 'in_attesa'
+            || (request.resource.data.ruolo == 'admin' && amministratoreIniziale()));
+
+      // L'utente può cambiare solo il proprio nome. Un amministratore cambia il ruolo degli altri,
+      // mai il proprio (così non resta chiuso fuori per sbaglio).
+      allow update: if (autenticato()
+          && request.auth.uid == uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nome']))
+        || (amministratore()
+          && request.auth.uid != uid
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ruolo'])
+          && request.resource.data.ruolo in ['in_attesa', 'viewer', 'admin']);
+
+      allow delete: if amministratore() && request.auth.uid != uid;
     }
   }
 }

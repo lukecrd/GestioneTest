@@ -54,3 +54,21 @@ npm run build
 
 - Ogni sezione ha colore e icona in `src/components/sectionMeta.ts` (unica fonte). Il colore della sezione aperta arriva al CSS come `--accent` su `.app-shell`; da lì: tessere colorate nella barra laterale, icona e filo nella barra in alto, fascia del titolo, pulsanti principali, focus dei campi, riquadri della Dashboard.
 - Tutti i colori reggono il testo bianco (contrasto ≥ 5:1). Verde/ambra/rosso restano riservati agli stati e agli avvisi.
+
+# Modulo S-13 — ottobre 2026
+
+- Territori → "Modulo S-13": riproduce l'S-13-I 1/22 (A4, 20 territori per pagina, 4 blocchi Assegnato a / il / Restituito il) e si compila dalle assegnazioni per l'anno di servizio scelto (settembre-agosto). Stampa con `window.print()`; stili in `ModuloS13.css`, logica in `righeS13()` di `src/utils/territori.js`.
+- Regole: "Restituito l'ultima volta il" = ultimo rientro prima dell'inizio dell'anno; entrano le assegnazioni che toccano l'anno (anche quelle iniziate prima e ancora fuori); oltre 4 in un anno il territorio continua su una riga in più.
+
+# Registrazione e accesso con email — ottobre 2026
+
+- Tolti PIN, accesso anonimo e ruoli decisi dal browser. `AuthGate` (main.tsx) gestisce accesso, registrazione, password dimenticata, verifica dell'email e attesa di approvazione; l'app parte solo per profili approvati.
+- Profili in Firestore `utenti/{uid}` (`email`, `nome`, `ruolo`: `in_attesa` | `viewer` | `admin`, `creato`). Pagina "Utenti" per gli amministratori, con contatore delle richieste.
+- `firestore.rules`: dati leggibili da viewer/admin con email verificata, modificabili solo da admin; ognuno crea solo il proprio profilo "in attesa"; un admin non cambia il proprio ruolo. Test nell'emulatore: `tests/regole.firestore.test.mjs` (7 scenari).
+- Primo amministratore: stessa email in `src/lib/utenti.ts` (EMAIL_AMMINISTRATORE_INIZIALE) e in `firestore.rules` (amministratoreIniziale).
+
+# Passaggio al progetto Firebase "congregazionedb" — ottobre 2026
+
+- `firebase-applet-config.json` punta al progetto `congregazionedb` (database Firestore predefinito), non più al progetto gestito da AI Studio.
+- Il vecchio database non era leggibile (accesso anonimo e registrazione disattivati), quindi i dati si portano dalla copia locale del browser: se il documento è vuoto, un amministratore vede "Carica nel database".
+- Esporta/Importa dati ora salvano un backup completo (stato + programmi mensili e domenicali); i vecchi file con il solo stato si importano ancora.

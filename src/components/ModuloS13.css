@@ -1,0 +1,104 @@
+/* Modulo S-13-I 1/22 "Registrazione delle assegnazioni del territorio".
+   Misure dal modello Word: A4, margini 19/12,7/17 mm, colonne 12,5 + 22,5 + 8 × 18,8 mm, Arial.
+   Selettori con .s13-pagina davanti per vincere le regole generiche di print.css sulle tabelle. */
+
+.s13-anteprima {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 24px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+}
+
+.s13-pagina {
+  box-sizing: border-box;
+  width: 210mm;
+  min-height: 297mm;
+  padding: 19mm 12.2mm 17mm;
+  background: #fff;
+  color: #000;
+  font-family: Arial, Helvetica, sans-serif;
+  box-shadow: 0 1px 3px rgb(0 0 0 / .15), 0 8px 24px rgb(0 0 0 / .08);
+  display: flex;
+  flex-direction: column;
+}
+
+.s13-pagina .s13-titolo {
+  margin: 0 0 4mm;
+  font-size: 14pt;
+  font-weight: 700;
+  text-align: center;
+  letter-spacing: .02em;
+}
+
+.s13-pagina .s13-anno {
+  display: flex;
+  align-items: flex-end;
+  gap: 2mm;
+  margin-bottom: 3mm;
+  font-size: 10pt;
+  font-weight: 700;
+}
+.s13-pagina .s13-anno-valore {
+  min-width: 22.5mm;
+  border-bottom: 1pt solid #000;
+  text-align: center;
+  font-weight: 400;
+}
+
+.s13-pagina .s13-tabella {
+  width: 185.4mm !important;
+  table-layout: fixed !important;
+  border-collapse: collapse;
+  font-size: 9pt !important;
+}
+.s13-pagina .s13-tabella th,
+.s13-pagina .s13-tabella td {
+  border: .5pt solid #000;
+  padding: 0 1mm !important;
+  overflow: hidden;
+  white-space: nowrap !important;
+  text-overflow: ellipsis;
+  color: #000 !important;
+}
+.s13-pagina .s13-tabella th {
+  background: #d9d9d9;
+  font-weight: 700;
+  font-size: 8.5pt;
+  height: 6mm;
+  text-align: center;
+  vertical-align: bottom;
+  white-space: normal !important;
+  line-height: 1.15;
+  print-color-adjust: exact;
+  -webkit-print-color-adjust: exact;
+}
+.s13-pagina .s13-tabella th.s13-sx { text-align: left; }
+.s13-pagina .s13-tabella th.s13-alta { height: 12mm; }
+.s13-pagina .s13-tabella th.s13-sub { font-size: 7.8pt; padding: 0 .4mm !important; white-space: nowrap !important; }
+
+/* Ogni territorio: riga del nome + riga delle date, separati dal territorio sopra da un filo più spesso. */
+.s13-pagina .s13-tabella .s13-riga-nome td { height: 5.4mm; border-top-width: 1pt; }
+.s13-pagina .s13-tabella .s13-riga-date td { height: 5mm; text-align: center; font-size: 8.5pt; }
+.s13-pagina .s13-tabella td.s13-num { text-align: center; font-weight: 700; vertical-align: middle; }
+.s13-pagina .s13-tabella td.s13-ultimo { text-align: center; vertical-align: middle; font-size: 8.5pt; }
+.s13-pagina .s13-tabella td.s13-nome { font-size: 9pt; }
+
+.s13-pagina .s13-nota { margin: 2mm 0 0; font-size: 8pt; }
+.s13-pagina .s13-sigla { margin-top: auto; padding-top: 3mm; font-size: 7.5pt; }
+
+@media print {
+  .s13-anteprima { display: block; overflow: visible; padding: 0; }
+  /* @page di print.css lascia 3/6/6 mm: qui si aggiunge il resto per arrivare ai margini del modello. */
+  .s13-pagina {
+    width: auto;
+    min-height: 0;
+    height: 285mm;
+    padding: 16mm 6.5mm 11mm;
+    box-shadow: none;
+    break-after: page;
+    page-break-after: always;
+  }
+  .s13-pagina:last-child { break-after: auto; page-break-after: auto; }
+}
