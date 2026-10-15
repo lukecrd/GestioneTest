@@ -16,6 +16,7 @@ export const UtentiView: React.FC<UtentiViewProps> = ({ utenti, mioUid, onShowTo
   const ordinati = ordinaUtenti(utenti);
   const inAttesa = ordinati.filter(u => u.ruolo === 'in_attesa');
   const attivi = ordinati.filter(u => u.ruolo !== 'in_attesa');
+  const consultazione = attivi.filter(u => u.ruolo === 'viewer');
 
   // Le regole di Firestore ricontrollano ogni modifica: qui gestiamo solo l'esito.
   const esegui = async (u: ProfiloUtente, azione: () => Promise<void>, ok: string) => {
@@ -51,7 +52,7 @@ export const UtentiView: React.FC<UtentiViewProps> = ({ utenti, mioUid, onShowTo
         <div>
           <h1 className="page-title">Utenti</h1>
           <p className="page-description">
-            Chi può entrare nell'app. Consultazione: vede e stampa i programmi, e modifica solo quelli indicati in "Programmi". Amministratore: modifica tutto e gestisce gli utenti.
+            Chi può entrare nell'app. Consultazione: vede e stampa i programmi, e modifica solo quelli indicati in "Permessi per programma". Amministratore: modifica tutto e gestisce gli utenti.
           </p>
         </div>
       </div>
@@ -102,7 +103,6 @@ export const UtentiView: React.FC<UtentiViewProps> = ({ utenti, mioUid, onShowTo
                 <th>Nome</th>
                 <th>Email</th>
                 <th>Ruolo</th>
-                <th>Programmi</th>
                 <th>Registrato il</th>
                 <th><span className="sr-only">Azioni</span></th>
               </tr>
@@ -130,34 +130,6 @@ export const UtentiView: React.FC<UtentiViewProps> = ({ utenti, mioUid, onShowTo
                         </select>
                       )}
                     </td>
-                    <td>
-                      {u.ruolo === 'admin' ? (
-                        <span className="text-sm text-slate-600">Tutti, in modifica</span>
-                      ) : (
-                        <details>
-                          <summary className="cursor-pointer text-sm whitespace-nowrap">
-                            {Object.values(permessiDi(u)).filter(v => v === 'modifica').length} in modifica, {Object.keys(permessiDi(u)).length} visibili
-                          </summary>
-                          <div className="grid gap-1.5 mt-2">
-                            {Object.entries(PROGRAMMI).map(([k, nome]) => (
-                              <label key={k} className="flex items-center justify-between gap-3 text-sm">
-                                <span className="whitespace-nowrap">{nome}</span>
-                                <select
-                                  className="inp !min-h-0 !py-1 w-[130px]"
-                                  value={permessiDi(u)[k] || ''}
-                                  disabled={inCorso === u.uid}
-                                  onChange={e => impostaPermesso(u, k, e.target.value as '' | 'vede' | 'modifica')}
-                                >
-                                  <option value="">Nascosto</option>
-                                  <option value="vede">Consulta</option>
-                                  <option value="modifica">Modifica</option>
-                                </select>
-                              </label>
-                            ))}
-                          </div>
-                        </details>
-                      )}
-                    </td>
                     <td className="whitespace-nowrap">{dataIt(u.creato)}</td>
                     <td className="text-right">
                       {!sonoIo && (
@@ -175,6 +147,54 @@ export const UtentiView: React.FC<UtentiViewProps> = ({ utenti, mioUid, onShowTo
         <p className="text-xs text-slate-500 mt-3 flex items-center gap-1.5">
           <Eye className="w-3.5 h-3.5" /> Non puoi cambiare il tuo ruolo: serve un altro amministratore, così nessuno resta chiuso fuori per sbaglio.
         </p>
+      </div>
+
+      <div className="card">
+        <div className="section-heading-row">
+          <div>
+            <h2 className="section-title">Permessi per programma</h2>
+            <p className="section-description">
+              Per ogni utente in consultazione: Nascosto (non vede il programma), Consulta (lo vede e lo stampa), Modifica (può cambiarlo).
+              Gli amministratori modificano sempre tutto.
+            </p>
+          </div>
+        </div>
+        {consultazione.length === 0 ? (
+          <p className="text-sm text-slate-600 py-4">Nessun utente in consultazione.</p>
+        ) : (
+          <div className="table-wrapper overflow-x-auto">
+            <table className="tbl">
+              <thead>
+                <tr>
+                  <th>Utente</th>
+                  {Object.values(PROGRAMMI).map(nome => <th key={nome} className="whitespace-nowrap">{nome}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {consultazione.map(u => (
+                  <tr key={u.uid}>
+                    <td className="font-semibold whitespace-nowrap">{u.nome || u.email}</td>
+                    {Object.entries(PROGRAMMI).map(([k, nome]) => (
+                      <td key={k}>
+                        <select
+                          className="inp !min-h-0 !py-1 w-[120px]"
+                          value={permessiDi(u)[k] || ''}
+                          disabled={inCorso === u.uid}
+                          aria-label={`${nome}: permesso di ${u.nome || u.email}`}
+                          onChange={e => impostaPermesso(u, k, e.target.value as '' | 'vede' | 'modifica')}
+                        >
+                          <option value="">Nascosto</option>
+                          <option value="vede">Consulta</option>
+                          <option value="modifica">Modifica</option>
+                        </select>
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </section>
   );
