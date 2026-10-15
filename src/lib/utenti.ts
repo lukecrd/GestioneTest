@@ -2,6 +2,7 @@ import { collection, deleteDoc, doc, onSnapshot, setDoc, updateDoc } from 'fireb
 import type { User } from 'firebase/auth';
 import { db } from '../firebase';
 import { ruoloIniziale } from '../utils/utenti';
+import type { PermessiProgrammi } from '../types';
 
 // ⚠ PRIMO AMMINISTRATORE: deve coincidere con l'email scritta in firestore.rules (funzione amministratoreIniziale).
 // Chi si registra con questa email, dopo averla verificata, diventa subito amministratore.
@@ -14,6 +15,7 @@ export interface ProfiloUtente {
   email: string;
   nome: string;
   ruolo: Ruolo;
+  permessi?: PermessiProgrammi;
   creato?: string;
 }
 
@@ -43,4 +45,5 @@ export function ascoltaUtenti(onDati: (u: ProfiloUtente[]) => void, onErrore: (e
 }
 
 export const cambiaRuolo = (uid: string, ruolo: Ruolo) => updateDoc(profiloRef(uid), { ruolo });
+export const cambiaPermessi = (uid: string, permessi: PermessiProgrammi) => updateDoc(profiloRef(uid), { permessi });
 export const eliminaProfilo = (uid: string) => deleteDoc(profiloRef(uid));
