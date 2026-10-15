@@ -1662,12 +1662,13 @@ try {
       {activeTab === 'hub' && (
         <ModernSectionHub
           state={state}
-          menRows={menRows}
-          menMonth={menMonth}
-          menYear={menYear}
-          domRows={domRows}
-          domMonth={domMonth}
-          domYear={domYear}
+          // La checklist valuta il mese corrente, non il mese aperto negli editor
+          menRows={menPrograms[domenicaPeriodKey(now.getFullYear(), now.getMonth())]?.rows ?? null}
+          menMonth={now.getMonth()}
+          menYear={now.getFullYear()}
+          domRows={selectDomenicaProgram(domPrograms, now.getFullYear(), now.getMonth())?.rows ?? null}
+          domMonth={now.getMonth()}
+          domYear={now.getFullYear()}
           onSelectSection={(sec) => setActiveTab(sec)}
           visibile={sez => puoVedere(currentUser, sez)}
           currentUserRole={currentUser?.role}
