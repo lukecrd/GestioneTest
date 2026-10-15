@@ -26,3 +26,17 @@ test('messaggi d\'errore leggibili e password di almeno 8 caratteri', () => {
   assert.equal(passwordValida('1234567'), false);
   assert.equal(passwordValida('12345678'), true);
 });
+
+test('permessi per programma: nascosto, sola lettura o modifica', async () => {
+  const { puoVedere, puoModificare, chiaviStatoModificabili } = await import('../src/utils/utenti.js');
+  const admin = { role: 'admin' };
+  const vecchio = { role: 'viewer' }; // profilo senza permessi: vede tutto, non modifica
+  const vm = { role: 'viewer', permessi: { vitaEMinistero: 'modifica', mensile: 'vede' } };
+  assert.ok(puoVedere(admin, 'territori') && puoModificare(admin, 'anagrafica'));
+  assert.ok(puoVedere(vecchio, 'territori') && !puoModificare(vecchio, 'territori'));
+  assert.ok(puoVedere(vm, 'mensile') && !puoModificare(vm, 'mensile'));
+  assert.ok(puoModificare(vm, 'vitaEMinistero'));
+  assert.ok(!puoVedere(vm, 'territori'));
+  assert.ok(puoVedere(vm, 'anagrafica') && !puoModificare(vm, 'anagrafica'));
+  assert.deepEqual(chiaviStatoModificabili({ role: 'viewer', permessi: { mensile: 'modifica', domenica: 'modifica', territori: 'modifica' } }), ['mensileArchives', 'territori']);
+});

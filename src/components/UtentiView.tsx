@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Check, Eye, ShieldCheck, Trash2, UserX } from 'lucide-react';
-import { ProfiloUtente, Ruolo, cambiaRuolo, eliminaProfilo } from '../lib/utenti';
-import { RUOLI, ordinaUtenti } from '../utils/utenti';
+import { ProfiloUtente, Ruolo, cambiaPermessi, cambiaRuolo, eliminaProfilo } from '../lib/utenti';
+import { PROGRAMMI, RUOLI, ordinaUtenti } from '../utils/utenti';
 
 interface UtentiViewProps {
   utenti: ProfiloUtente[];
@@ -33,6 +33,13 @@ export const UtentiView: React.FC<UtentiViewProps> = ({ utenti, mioUid, onShowTo
   const imposta = (u: ProfiloUtente, ruolo: Ruolo) =>
     esegui(u, () => cambiaRuolo(u.uid, ruolo), ruolo === 'in_attesa' ? `Accesso sospeso per ${u.nome || u.email}.` : `${u.nome || u.email}: ${RUOLI[ruolo]}.`);
 
+  // Senza permessi salvati l'utente vede tutto: si parte da lì. '' = programma nascosto.
+  const permessiDi = (u: ProfiloUtente) => u.permessi ?? Object.fromEntries(Object.keys(PROGRAMMI).map(k => [k, 'vede' as const]));
+  const impostaPermesso = (u: ProfiloUtente, programma: string, valore: '' | 'vede' | 'modifica') => {
+    const { [programma]: _vecchio, ...altri } = permessiDi(u);
+    esegui(u, () => cambiaPermessi(u.uid, valore ? { ...altri, [programma]: valore } : altri), `Permessi di ${u.nome || u.email} aggiornati.`);
+  };
+
   const elimina = (u: ProfiloUtente) => {
     if (!window.confirm(`Eliminare la richiesta di ${u.nome || u.email}? Se accede di nuovo, comparirà ancora qui in attesa.`)) return;
     esegui(u, () => eliminaProfilo(u.uid), `Richiesta di ${u.nome || u.email} eliminata.`);
@@ -44,7 +51,7 @@ export const UtentiView: React.FC<UtentiViewProps> = ({ utenti, mioUid, onShowTo
         <div>
           <h1 className="page-title">Utenti</h1>
           <p className="page-description">
-            Chi può entrare nell'app. Consultazione: vede e stampa i programmi. Amministratore: può anche modificarli e gestire gli utenti.
+            Chi può entrare nell'app. Consultazione: vede e stampa i programmi, e modifica solo quelli indicati in "Programmi". Amministratore: modifica tutto e gestisce gli utenti.
           </p>
         </div>
       </div>
@@ -95,6 +102,7 @@ export const UtentiView: React.FC<UtentiViewProps> = ({ utenti, mioUid, onShowTo
                 <th>Nome</th>
                 <th>Email</th>
                 <th>Ruolo</th>
+                <th>Programmi</th>
                 <th>Registrato il</th>
                 <th><span className="sr-only">Azioni</span></th>
               </tr>
@@ -120,6 +128,34 @@ export const UtentiView: React.FC<UtentiViewProps> = ({ utenti, mioUid, onShowTo
                           <option value="viewer">{RUOLI.viewer}</option>
                           <option value="admin">{RUOLI.admin}</option>
                         </select>
+                      )}
+                    </td>
+                    <td>
+                      {u.ruolo === 'admin' ? (
+                        <span className="text-sm text-slate-600">Tutti, in modifica</span>
+                      ) : (
+                        <details>
+                          <summary className="cursor-pointer text-sm whitespace-nowrap">
+                            {Object.values(permessiDi(u)).filter(v => v === 'modifica').length} in modifica, {Object.keys(permessiDi(u)).length} visibili
+                          </summary>
+                          <div className="grid gap-1.5 mt-2">
+                            {Object.entries(PROGRAMMI).map(([k, nome]) => (
+                              <label key={k} className="flex items-center justify-between gap-3 text-sm">
+                                <span className="whitespace-nowrap">{nome}</span>
+                                <select
+                                  className="inp !min-h-0 !py-1 w-[130px]"
+                                  value={permessiDi(u)[k] || ''}
+                                  disabled={inCorso === u.uid}
+                                  onChange={e => impostaPermesso(u, k, e.target.value as '' | 'vede' | 'modifica')}
+                                >
+                                  <option value="">Nascosto</option>
+                                  <option value="vede">Consulta</option>
+                                  <option value="modifica">Modifica</option>
+                                </select>
+                              </label>
+                            ))}
+                          </div>
+                        </details>
                       )}
                     </td>
                     <td className="whitespace-nowrap">{dataIt(u.creato)}</td>

@@ -49,6 +49,7 @@ interface ModernSectionHubProps {
   onSelectSection: (section: SectionKey) => void;
   currentUserRole?: 'admin' | 'viewer';
   onUpdateResponsible: (key: ChecklistProgramKey, responsible: { name: string; email: string } | null) => void;
+  visibile: (sezione: string) => boolean; // permessi per programma dell'utente
 }
 
 const MESI_IT = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
@@ -76,6 +77,7 @@ export const ModernSectionHub: React.FC<ModernSectionHubProps> = ({
   onSelectSection,
   currentUserRole,
   onUpdateResponsible,
+  visibile,
 }) => {
   const isAdmin = currentUserRole === 'admin';
   const people = state.people.length;
@@ -100,13 +102,13 @@ export const ModernSectionHub: React.FC<ModernSectionHubProps> = ({
 
   const operaPronto = (state.operaPubblica?.schedule || []).some(s => fallsInMonth(s.dateStr, curMonth, curYear));
 
-  const checklist: { key: ChecklistProgramKey; label: string; ready: boolean; section: SectionKey }[] = [
+  const checklist: { key: ChecklistProgramKey; label: string; ready: boolean; section: SectionKey }[] = ([
     { key: 'mensile', label: 'Programma mensile', ready: mensilePronto, section: 'mensile' },
     { key: 'domenica', label: 'Adunanza domenica', ready: domenicaPronto, section: 'domenica' },
     { key: 'vitaEMinistero', label: 'Vita e ministero', ready: vitaPronto, section: 'vitaEMinistero' },
     { key: 'servizioCampo', label: 'Servizio di campo', ready: campoPronto, section: 'servizioCampo' },
     { key: 'operaPubblica', label: 'Opera pubblica', ready: operaPronto, section: 'operaPubblica' },
-  ];
+  ] as const).filter(c => visibile(c.section));
 
   const readyCount = checklist.filter(c => c.ready).length;
 
@@ -345,7 +347,7 @@ export const ModernSectionHub: React.FC<ModernSectionHubProps> = ({
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-          {modules.map((module) => {
+          {modules.filter(m => visibile(m.id)).map((module) => {
             const Icon = module.icon;
             return (
               <button key={module.id} onClick={() => onSelectSection(module.id)} className="module-card group" style={accentStyle(module.id, '--mod-color')}>
