@@ -307,8 +307,12 @@ export function ServizioCampoView({
     const nonSalaPhysical = physicalOnly.filter(l => l !== 'Sala del Regno');
     if (nonSalaPhysical.length > 0) return nonSalaPhysical;
     if (physicalOnly.length > 0) return physicalOnly;
-    return ['Sala del Regno'];
+    return locations;
   }, [locations]);
+
+  // A location missing from the list shows as the first <select> option on screen but would print as-is: treat it as unset.
+  const isKnownLocation = (loc: string | undefined | null): loc is string => !!loc && locations.includes(loc);
+  const sundayFallbackLocation = locations.find(isZoomLocation) || locations[0];
 
   const saveServizioData = (updated: ServizioCampoData) => {
     onSaveState({
@@ -366,18 +370,18 @@ export function ServizioCampoView({
       // Determine default location if not explicitly assigned
       let assignedLocation: string;
       if (item.slotKey === 'domenicaPomeriggio') {
-        assignedLocation = slotDef.defaultLocation || 'Zoom (Online)';
-      } else if (slotDef.defaultLocation && slotDef.defaultLocation !== 'rotazione') {
+        assignedLocation = isKnownLocation(slotDef.defaultLocation) ? slotDef.defaultLocation : sundayFallbackLocation;
+      } else if (isKnownLocation(slotDef.defaultLocation)) {
         assignedLocation = slotDef.defaultLocation;
       } else {
-        assignedLocation = rotationLocations[nonSundayRotationIndex % rotationLocations.length] || 'Sala del Regno';
+        assignedLocation = rotationLocations[nonSundayRotationIndex % rotationLocations.length];
         nonSundayRotationIndex++;
       }
 
       if (existing) {
         return {
           ...existing,
-          location: existing.location || assignedLocation,
+          location: isKnownLocation(existing.location) ? existing.location : assignedLocation,
           meetingType: existing.meetingType || (holidayName ? 'festivo' : 'standard'),
           specialNote: existing.specialNote || holidayName || specialNoteFromGlobal
         };
@@ -414,7 +418,7 @@ export function ServizioCampoView({
         std => std.dateStr === s.dateStr && std.slotKey === s.slotKey
       );
       return s.isCustom || s.slotKey === 'speciale' || !isStandardRecurring;
-    });
+    }).map(s => (isKnownLocation(s.location) ? s : { ...s, location: locations[0] }));
 
     // 3. Merge & sort chronologically by date and time
     const merged = [...standardItems, ...customItems];
@@ -2156,7 +2160,7 @@ await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(r
                       </label>
                       <select
                         disabled={!isAdmin}
-                        value={conf.defaultLocation || (isSunday ? 'Zoom (Online)' : 'rotazione')}
+                        value={isKnownLocation(conf.defaultLocation) ? conf.defaultLocation : (isSunday ? sundayFallbackLocation : 'rotazione')}
                         onChange={e => handleSaveSlotSetting(slotKey, { defaultLocation: e.target.value })}
                         className={`inp py-1 px-2 text-xs mt-1 font-semibold ${
                           isConfiguredZoom
