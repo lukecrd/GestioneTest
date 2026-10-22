@@ -102,11 +102,8 @@ export function subscribeToCongregation(
   );
 }
 
-// chiavi: solo queste parti di state (utenti con permessi per programma); merge lascia intatto il resto.
-export async function pushStateToFirestore(state: StateData, chiavi?: string[]) {
-  if (chiavi && !chiavi.length) return; // niente di modificabile è cambiato
-  const scelto = chiavi ? Object.fromEntries(chiavi.filter(k => k in state).map(k => [k, (state as any)[k]])) : state;
-  const cleanState = JSON.parse(JSON.stringify(scelto));
+export async function pushStateToFirestore(state: StateData) {
+  const cleanState = JSON.parse(JSON.stringify(state));
   await setDoc(
     DOC_REF,
     {
@@ -117,29 +114,25 @@ export async function pushStateToFirestore(state: StateData, chiavi?: string[]) 
   );
 }
 
-// parti: quali programmi inviare (chi ha permessi solo su uno dei due non tocca l'altro).
-export async function pushActiveProgramsToFirestore(programs: ActiveProgramsData, parti = { men: true, dom: true }) {
-  const men = {
-    ...(Object.keys(programs.menPrograms || {}).length
-      ? { menPrograms: serializeMensilePrograms(programs.menPrograms) } : {}),
-    menRows: serializeMensileRows(programs.menRows),
-    menTitle: programs.menTitle,
-    menWarn: programs.menWarn,
-    menMonth: programs.menMonth,
-    menYear: programs.menYear,
-  };
-  const dom = {
-    // Only touched periods are sent. Omit empty maps: Firestore would erase the map.
-    ...(Object.keys(programs.domPrograms || {}).length
-      ? { domPrograms: serializeDomenicaPrograms(programs.domPrograms) } : {}),
-    domRows: serializeDomenicaRows(programs.domRows),
-    domTitle: programs.domTitle,
-    domWarn: programs.domWarn,
-    domMonth: programs.domMonth,
-    domYear: programs.domYear,
-  };
+export async function pushActiveProgramsToFirestore(programs: ActiveProgramsData) {
   const payload = {
-    activePrograms: { ...(parti.men ? men : {}), ...(parti.dom ? dom : {}) },
+    activePrograms: {
+      ...(Object.keys(programs.menPrograms || {}).length
+        ? { menPrograms: serializeMensilePrograms(programs.menPrograms) } : {}),
+      menRows: serializeMensileRows(programs.menRows),
+      menTitle: programs.menTitle,
+      menWarn: programs.menWarn,
+      menMonth: programs.menMonth,
+      menYear: programs.menYear,
+      // Only touched periods are sent. Omit empty maps: Firestore would erase the map.
+      ...(Object.keys(programs.domPrograms || {}).length
+        ? { domPrograms: serializeDomenicaPrograms(programs.domPrograms) } : {}),
+      domRows: serializeDomenicaRows(programs.domRows),
+      domTitle: programs.domTitle,
+      domWarn: programs.domWarn,
+      domMonth: programs.domMonth,
+      domYear: programs.domYear,
+    },
     updatedAt: new Date().toISOString(),
   };
   const cleanPayload = JSON.parse(JSON.stringify(payload));

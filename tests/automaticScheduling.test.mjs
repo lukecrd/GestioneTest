@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import ts from 'typescript';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createSchedulingLedger, weeklyDates, generateVitaAssignments, vitaAssignmentIds, assignUniqueSlots, weeklyRoleConflicts, weekKey } from '../src/utils/automaticScheduling.js';
+import { createSchedulingLedger, weeklyDates, generateVitaAssignments, vitaAssignmentIds, assignUniqueSlots } from '../src/utils/automaticScheduling.js';
 
 const person = (id, name = id) => ({ id, name, gender: 'M', spouseId: null, roles: {} });
 const participant = (id, roles = { tesoriLettura: true }, personId) => ({ id, name: id, gender: 'M', personId, roles });
@@ -303,24 +303,4 @@ test('active Monday programme overrides a legacy Sunday archive for the same wee
   assert.ok(ledger.isBusy({ name: 'Attivo nuovo' }, '2026-10-07'));
   assert.ok(ledger.isBusy({ name: 'Attivo nuovo' }, '2026-10-11'));
   assert.equal(ledger.isBusy({ name: 'Archivio vecchio' }, '2026-10-07'), false);
-});
-
-test('weekly multi-role check spans every programme, one week = Monday to Sunday', () => {
-  assert.equal(weekKey('2026-10-11'), '2026-10-05'); // Sunday belongs to the week before
-  assert.equal(weekKey('2026-10-12'), '2026-10-12');
-  const state = base({
-    people: [person('p', 'Luca')],
-    vitaEMinistero: { participants: [participant('vm', {}, 'p')], meetings: [meeting('v', '2026-10-07', { tesoriLetturaReaderId: 'vm' })] },
-    servizioCampo: { conductors: [{ id: 'f', personId: 'p', name: 'Luca' }], schedule: [
-      { dateStr: '2026-10-13', conductorId: 'f', isActive: true }, { dateStr: '2026-10-15', conductorId: 'f', isActive: true }] },
-    discorsiEsterni: { oratori: [], uscite: [{ id: 'u', data: '2026-10-25', oratore: 'Marco', titolo: 't', congregazione: 'c' }] },
-  });
-  const conflicts = weeklyRoleConflicts(state, {
-    mensileRows: [{ date: new Date('2026-10-05T12:00:00'), ingresso: ['luca', '—'] }],
-    domenicaRows: [{ date: new Date('2026-10-25T12:00:00'), presidente: 'Marco' }],
-  });
-  assert.deepEqual(conflicts.map(c => [c.week, c.name, c.roles.map(r => r.program + ':' + r.role)]), [
-    ['2026-10-05', 'Luca', ['mensile:Usciere ingresso', 'vitaEMinistero:Lettura biblica']],
-    ['2026-10-19', 'Marco', ['domenica:Presidente', 'discorsiEsterni:Discorso esterno']],
-  ]); // same role twice in a week (two field-service meetings) is not a conflict
 });

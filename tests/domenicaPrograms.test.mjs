@@ -90,7 +90,6 @@ test('actual App sync saves only the edited period plus unsynced legacy months',
     menRows: null, menTitle: '', menWarn: null, menMonth: 9, menYear: 2026,
     domRows: october['2026-10'].rows, domTitle: 'Ottobre', domWarn: null, domMonth: 9, domYear: 2026,
     pushActiveProgramsToFirestore: data => { payload = data; return Promise.resolve(); },
-    puoModificare: () => true, currentUser: { role: 'admin' },
   };
   const fn = new Function(...Object.keys(context), compiled + '; return syncActivePrograms;')(...Object.values(context));
   fn({ domRows: rows('2026-11-01', 'Novembre'), domMonth: 10, domYear: 2026, domTitle: 'Novembre' });

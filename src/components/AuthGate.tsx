@@ -73,7 +73,7 @@ export const AuthGate: React.FC<{ children: (utente: AuthUser, esci: () => void)
     );
   }
 
-  const utente: AuthUser = { uid: user.uid, email: profilo.email, displayName: profilo.nome || profilo.email, role: profilo.ruolo, permessi: profilo.permessi };
+  const utente: AuthUser = { uid: user.uid, email: profilo.email, displayName: profilo.nome || profilo.email, role: profilo.ruolo };
   return <React.Fragment key={user.uid}>{children(utente, esci)}</React.Fragment>;
 };
 

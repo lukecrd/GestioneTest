@@ -9,7 +9,6 @@ interface ModernSquareNavbarProps {
   peopleCount: number;
   territoriAlert: number; // scaduti + in scadenza entro 30 giorni
   utentiInAttesa: number | null; // null: non amministratore, la voce Utenti non compare
-  visibile: (sezione: string) => boolean; // permessi per programma dell'utente
 }
 
 type NavItem = {
@@ -33,7 +32,6 @@ export const ModernSquareNavbar: React.FC<ModernSquareNavbarProps> = ({
   peopleCount,
   territoriAlert,
   utentiInAttesa,
-  visibile,
 }) => {
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -64,7 +62,7 @@ export const ModernSquareNavbar: React.FC<ModernSquareNavbarProps> = ({
       {(['main', 'programmi', 'servizio', 'gestione'] as const).map((group) => (
         <div key={group} className="app-nav-group">
           {groupLabels[group] && <div className="app-nav-group-label">{groupLabels[group]}</div>}
-          {navItems.filter((item) => item.group === group && visibile(item.id)).map((item) => {
+          {navItems.filter((item) => item.group === group).map((item) => {
             const Icon = SECTION_META[item.id].icon;
             const isActive = activeTab === item.id;
             return (

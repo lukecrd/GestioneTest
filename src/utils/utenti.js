@@ -48,32 +48,3 @@ export function messaggioErrore(err) {
 export function passwordValida(password) {
   return typeof password === 'string' && password.length >= 8;
 }
-
-// Programmi su cui si possono dare permessi per singolo utente (chiavi = sezioni dell'app).
-export const PROGRAMMI = {
-  mensile: 'Programma mensile',
-  domenica: 'Adunanza domenica',
-  vitaEMinistero: 'Vita e ministero',
-  discorsiEsterni: 'Discorsi esterni',
-  servizioCampo: 'Servizio di campo',
-  operaPubblica: 'Opera pubblica',
-  territori: 'Territori',
-};
-
-// permessi: { [programma]: 'vede' | 'modifica' }; un programma assente è nascosto.
-// Senza permessi (profili creati prima) l'utente in consultazione vede tutto e non modifica nulla.
-export function puoVedere(utente, sezione) {
-  if (utente?.role === 'admin' || !(sezione in PROGRAMMI) || !utente?.permessi) return true;
-  return !!utente.permessi[sezione];
-}
-
-// Fuori dai programmi (persone, assenze, utenti…) modifica solo l'amministratore.
-export function puoModificare(utente, sezione) {
-  return utente?.role === 'admin' || (sezione in PROGRAMMI && utente?.permessi?.[sezione] === 'modifica');
-}
-
-// Chiavi di "state" in congregationData che l'utente può scrivere: le stesse controllate da firestore.rules.
-export function chiaviStatoModificabili(utente) {
-  return Object.keys(PROGRAMMI).filter(s => s !== 'domenica' && puoModificare(utente, s))
-    .map(s => (s === 'mensile' ? 'mensileArchives' : s));
-}

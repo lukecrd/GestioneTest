@@ -1,7 +1,7 @@
 import { mensileWeekStart, mondayDates } from './utils/mensileWeek';
 import { normalizeMensilePrograms, legacyMensileProgram, mergeMensilePrograms, serializeMensilePrograms, updateMensilePeriod, clearMensilePrograms } from './utils/mensilePrograms';
 import { domenicaPeriodKey, normalizeDomenicaPrograms, selectDomenicaProgram, readProgramSelection, legacyDomenicaProgram, mergeDomenicaPrograms, serializeDomenicaPrograms, updateDomenicaPeriod, clearDomenicaPrograms } from './utils/domenicaPrograms';
-import { createSchedulingLedger, weeklyDates, weeklyRoleConflicts } from './utils/automaticScheduling';
+import { createSchedulingLedger, weeklyDates } from './utils/automaticScheduling';
 import { personNameKey, duplicatePersonNames, syncRegistryLinks } from './utils/peopleRegistry';
 import { exportProgramExcel } from './utils/programExcel';
 import React, { useState, useEffect, useRef } from 'react';
@@ -48,7 +48,7 @@ import { Person, StateData, MensileRow, DomenicaRow, DomenicaMonthProgram, Mensi
 import { StatsView } from './components/StatsView';
 import { UtentiView } from './components/UtentiView';
 import { ascoltaUtenti, ProfiloUtente } from './lib/utenti';
-import { contaInAttesa, puoVedere, puoModificare, chiaviStatoModificabili, PROGRAMMI } from './utils/utenti';
+import { contaInAttesa } from './utils/utenti';
 import { OperaPubblicaView } from './components/OperaPubblicaView';
 import { ServizioCampoView } from './components/ServizioCampoView';
 import { VitaEMinisteroView } from './components/VitaEMinisteroView';
@@ -58,7 +58,6 @@ import { normalizeDiscorsiEsterni } from './utils/discorsiEsterni';
 import { normalizeTerritori, alertTerritori } from './utils/territori';
 import { ModernSectionHub, SectionKey } from './components/ModernSectionHub';
 import { ModernSquareNavbar } from './components/ModernSquareNavbar';
-import { ConflittiSettimana } from './components/ConflittiSettimana';
 import { SECTION_META, accentStyle } from './components/sectionMeta';
 import { ExcelImportModal } from './components/ExcelImportModal';
 import { DEFAULT_VITA_MINISTERO_DATA } from './data/defaultVitaEMinistero';
@@ -200,11 +199,9 @@ export default function App({ utente, onEsci }: { utente: AuthUser; onEsci: () =
     return ascoltaUtenti(setUtenti, err => console.warn('Elenco utenti non disponibile:', err));
   }, [currentUser.role]);
 
-  // Permessi per programma: la sezione aperta decide se si può modificare (le regole di Firestore ricontrollano).
-  const canEdit = puoModificare(currentUser, activeTab);
   const checkAdminPermission = (): boolean => {
-    if (!canEdit) {
-      showToast('Azione non consentita: per questa sezione hai solo la consultazione');
+    if (currentUser?.role === 'viewer') {
+      showToast('Azione non consentita in modalità Solo Lettura (richiesto Admin)');
       return false;
     }
     return true;
@@ -241,8 +238,7 @@ export default function App({ utente, onEsci }: { utente: AuthUser; onEsci: () =
     storage.set(STORAGE_KEY, JSON.stringify(newState));
     setSyncMsg('Salvataggio Cloud…');
     setSyncClass('text-blue-500 font-medium');
-    pushStateToFirestore(newState, currentUser.role === 'admin' ? undefined : chiaviStatoModificabili(currentUser)
-      .filter(k => JSON.stringify((newState as any)[k]) !== JSON.stringify((state as any)[k])))
+    pushStateToFirestore(newState)
       .then(() => {
         setSyncMsg('✓ Sincronizzato Cloud ' + timeNow());
         setSyncClass('text-emerald-600 font-medium');
@@ -260,8 +256,8 @@ export default function App({ utente, onEsci }: { utente: AuthUser; onEsci: () =
     const month = overrides.domMonth ?? domMonth;
     const key = domenicaPeriodKey(year, month);
     // Include locally migrated periods that do not yet have a cloud entry.
-    let updates = {
-      ...Object.fromEntries(Object.entries(domProgramsRef.current).filter(([period]) => !domCloudKeys.current.has(period))),
+    let updates: Record<string, DomenicaMonthProgram> = {
+      ...(Object.fromEntries(Object.entries(domProgramsRef.current).filter(([period]) => !domCloudKeys.current.has(period))) as Record<string, DomenicaMonthProgram>),
       ...(overrides.domPrograms || {}),
     };
     if ('domRows' in overrides || 'domTitle' in overrides || 'domWarn' in overrides) {
@@ -276,8 +272,8 @@ export default function App({ utente, onEsci }: { utente: AuthUser; onEsci: () =
     const menY = overrides.menYear ?? menYear;
     const menM = overrides.menMonth ?? menMonth;
     const menKey = domenicaPeriodKey(menY, menM);
-    let menUpdates = {
-      ...Object.fromEntries(Object.entries(menProgramsRef.current).filter(([period]) => !menCloudKeys.current.has(period))),
+    let menUpdates: Record<string, MensileMonthProgram> = {
+      ...(Object.fromEntries(Object.entries(menProgramsRef.current).filter(([period]) => !menCloudKeys.current.has(period))) as Record<string, MensileMonthProgram>),
       ...(overrides.menPrograms || {}),
     };
     if ('menRows' in overrides || 'menTitle' in overrides || 'menWarn' in overrides) {
@@ -304,7 +300,7 @@ export default function App({ utente, onEsci }: { utente: AuthUser; onEsci: () =
       domPrograms: updates,
       menPrograms: menUpdates,
     };
-    pushActiveProgramsToFirestore(data, { men: puoModificare(currentUser, 'mensile'), dom: puoModificare(currentUser, 'domenica') }).catch((err) => {
+    pushActiveProgramsToFirestore(data).catch((err) => {
       console.error('Active program sync error:', err);
       setSyncMsg('Offline — Programmi salvati in locale');
       setSyncClass('text-amber-600');
@@ -428,7 +424,7 @@ export default function App({ utente, onEsci }: { utente: AuthUser; onEsci: () =
     pool: Person[],
     duplicates?: string[]
   ) => {
-    if (!canEdit) {
+    if (currentUser?.role !== 'admin') {
       return renderPersonName(currentValue, duplicates);
     }
     const value = currentValue && currentValue !== '—' ? currentValue : '';
@@ -477,7 +473,7 @@ export default function App({ utente, onEsci }: { utente: AuthUser; onEsci: () =
   // testo compatto (es. "2", "Massa") per Viewer e in stampa/PDF
   const renderGroupCell = (rowIndex: number, field: 'riassetto' | 'pulizie', currentValue: string | undefined) => {
     const compact = currentValue || '—';
-    if (!canEdit) {
+    if (currentUser?.role !== 'admin') {
       return compact;
     }
     return (
@@ -689,7 +685,7 @@ export default function App({ utente, onEsci }: { utente: AuthUser; onEsci: () =
   const menRows = menProgram?.rows ?? null;
   const menWarn = menProgram?.warn ?? null;
   const menTitle = menProgram?.title || `Mese di ${MESI[menMonth]} ${menYear}`;
-  const allMensileRows = Object.values(menPrograms).flatMap(program => program.rows || []);
+  const allMensileRows = (Object.values(menPrograms) as MensileMonthProgram[]).flatMap(program => program.rows || []);
 
   const generateMensile = (y: number, m: number) => {
     if (!checkAdminPermission()) return;
@@ -1074,7 +1070,6 @@ try {
   };
 
   const deleteMensileArchive = (archiveId: string, title: string) => {
-    if (!checkAdminPermission()) return;
     setConfirmModalState({
       title: 'Elimina dall\'Archivio',
       message: `Sei sicuro di voler eliminare dall'archivio il programma "${title}"?`,
@@ -1093,7 +1088,6 @@ try {
   };
 
   const clearAllArchives = () => {
-    if (currentUser.role !== 'admin') { showToast('Azione riservata agli amministratori'); return; }
     if (!state.mensileArchives || state.mensileArchives.length === 0) return;
     setConfirmModalState({
       title: 'Svuota Archivio Programmi',
@@ -1114,7 +1108,6 @@ try {
   };
 
   const resetMensileProgram = () => {
-    if (!checkAdminPermission()) return;
     if (!menRows) {
       showToast('Nessun programma mensile da azzerare');
       return;
@@ -1134,7 +1127,6 @@ try {
   };
 
   const resetDomenicaProgram = () => {
-    if (!checkAdminPermission()) return;
     if (!domRows) {
       showToast('Nessun turno adunanza domenica da azzerare');
       return;
@@ -1153,7 +1145,6 @@ try {
   };
 
   const resetAllPrograms = () => {
-    if (currentUser.role !== 'admin') { showToast('Azione riservata agli amministratori'); return; }
     if (!menRows && !domRows) {
       showToast('Nessun programma attivo da azzerare');
       return;
@@ -1173,7 +1164,6 @@ try {
   };
 
   const resetToInitialDefaults = () => {
-    if (currentUser.role !== 'admin') { showToast('Azione riservata agli amministratori'); return; }
     setConfirmModalState({
       title: 'Ripristina Dati Iniziali',
       message: 'Vuoi ripristinare tutti i dati della congregazione allo stato iniziale? Verranno ripristinate le persone ed eliminati tutti i programmi salvati.',
@@ -1241,9 +1231,7 @@ try {
     ? [...importedOctoberRows, { date: addDays(importedOctoberRows[importedOctoberRows.length - 1].date, 7), placeholder: true, oratore: '', congregazione: '', titoloDiscorso: '', presidente: '', lettore: '' }]
     : importedOctoberRows;
 
-  const allDomenicaRows = Object.values(domPrograms).flatMap(program => program.rows || []);
-  // Stesso nominativo in più ruoli nella stessa settimana, su tutti i programmi.
-  const conflittiRuoli = activeTab in PROGRAMMI ? weeklyRoleConflicts(state, { mensileRows: allMensileRows, domenicaRows: allDomenicaRows }) : [];
+  const allDomenicaRows = (Object.values(domPrograms) as DomenicaMonthProgram[]).flatMap(program => program.rows || []);
 
   const generateDomenica = (y: number, m: number) => {
     if (!checkAdminPermission()) return;
@@ -1355,7 +1343,7 @@ try {
 
   const renderDomenicaField = (rowIndex: number, field: 'oratore' | 'congregazione' | 'titoloDiscorso' | 'presidente' | 'lettore', value?: string) => {
     const current = value && value !== '—' ? value : '';
-    if (!canEdit) return current;
+    if (currentUser?.role !== 'admin') return current;
 
     if (field === 'oratore' || field === 'congregazione' || field === 'titoloDiscorso') {
       const placeholder = field === 'oratore' ? 'Nome oratore' : field === 'congregazione' ? 'Congregazione' : 'Seleziona o scrivi il tema';
@@ -1495,14 +1483,14 @@ try {
 
   // Primo caricamento nel database (vuoto) dei dati salvati in questo browser.
   const caricaDatiLocali = () => {
-    if (currentUser.role !== 'admin' || !checkAdminPermission()) return;
+    if (!checkAdminPermission()) return;
     saveState(state);
     syncActivePrograms({ menPrograms: menProgramsRef.current, domPrograms: domProgramsRef.current });
     showToast(`Caricati nel database: ${state.people.length} persone, ${Object.keys(menProgramsRef.current).length} programmi mensili, ${Object.keys(domProgramsRef.current).length} domenicali`);
   };
 
   const handleImportData = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (currentUser.role !== 'admin') { showToast('Importazione riservata agli amministratori'); return; }
+    if (!checkAdminPermission()) return;
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
@@ -1601,7 +1589,6 @@ try {
         <ModernSquareNavbar
           activeTab={activeTab}
           onSelectTab={(tab) => setActiveTab(tab)}
-          visibile={sez => puoVedere(currentUser, sez)}
           peopleCount={state.people.length}
           territoriAlert={alertTerritori(normalizeTerritori(state.territori).assegnazioni).length}
           utentiInAttesa={currentUser.role === 'admin' ? contaInAttesa(utenti) : null}
@@ -1645,32 +1632,26 @@ try {
             </div>
           </header>
 
-          {!canEdit && activeTab !== 'hub' && (
+          {currentUser.role === 'viewer' && (
             <div className="viewer-banner no-print">
               <Eye className="w-4 h-4 shrink-0" />
-              <span>Sola lettura per questa sezione. Le modifiche richiedono il permesso di un amministratore.</span>
+              <span>Modalità sola lettura. Le modifiche richiedono accesso amministratore.</span>
               <button onClick={handleLogout}>Cambia accesso</button>
             </div>
           )}
 
           <main className="app-content">
-      {!puoVedere(currentUser, activeTab) ? (
-        <div className="card text-sm text-slate-600" role="status">Non hai accesso a questa sezione. Chiedi a un amministratore.</div>
-      ) : <>
-      {activeTab in PROGRAMMI && <ConflittiSettimana conflitti={conflittiRuoli} sezione={activeTab} visibile={sez => puoVedere(currentUser, sez)} />}
       {/* ============ HUB PRINCIPALE A QUADRATI MODERNI ============ */}
       {activeTab === 'hub' && (
         <ModernSectionHub
           state={state}
-          // La checklist valuta il mese corrente, non il mese aperto negli editor
-          menRows={menPrograms[domenicaPeriodKey(now.getFullYear(), now.getMonth())]?.rows ?? null}
-          menMonth={now.getMonth()}
-          menYear={now.getFullYear()}
-          domRows={selectDomenicaProgram(domPrograms, now.getFullYear(), now.getMonth())?.rows ?? null}
-          domMonth={now.getMonth()}
-          domYear={now.getFullYear()}
+          menRows={menRows}
+          menMonth={menMonth}
+          menYear={menYear}
+          domRows={domRows}
+          domMonth={domMonth}
+          domYear={domYear}
           onSelectSection={(sec) => setActiveTab(sec)}
-          visibile={sez => puoVedere(currentUser, sez)}
           currentUserRole={currentUser?.role}
           onUpdateResponsible={updateProgramResponsible}
         />
@@ -2351,7 +2332,7 @@ try {
             const audioVideoOptions = state.people.filter(p => p.roles.console).sort((a, b) => a.name.localeCompare(b.name));
             return (
             <div className="print-sheet">
-              {canEdit && (
+              {currentUser?.role === 'admin' && (
                 <p className="text-xs text-slate-500 dark:text-slate-400 mb-2 no-print">
                   Clicca su un nominativo per assegnare un'altra persona all'incarico.
                 </p>
@@ -2785,8 +2766,7 @@ try {
                   <label className="lbl">Riassetto — gruppo di partenza</label>
                   <select
                     value={state.groups.riassetto}
-                    onChange={e => checkAdminPermission() && saveState({ ...state, groups: { ...state.groups, riassetto: e.target.value } })}
-                    disabled={!canEdit}
+                    onChange={e => saveState({ ...state, groups: { ...state.groups, riassetto: e.target.value } })}
                     className="inp"
                   >
                     <option value="1">Gruppo 1</option>
@@ -2799,8 +2779,7 @@ try {
                   <label className="lbl">Pulizie — gruppo di partenza</label>
                   <select
                     value={state.groups.pulizie}
-                    onChange={e => checkAdminPermission() && saveState({ ...state, groups: { ...state.groups, pulizie: e.target.value } })}
-                    disabled={!canEdit}
+                    onChange={e => saveState({ ...state, groups: { ...state.groups, pulizie: e.target.value } })}
                     className="inp"
                   >
                     <option value="Massa">Massa</option>
@@ -2866,7 +2845,7 @@ try {
           state={state}
           activePrograms={{ mensileRows: allMensileRows, domenicaRows: allDomenicaRows }}
           onSaveState={saveState}
-          isAdmin={canEdit}
+          isAdmin={currentUser?.role === 'admin'}
           onShowToast={showToast}
           checkAdminPermission={checkAdminPermission}
         />
@@ -2878,7 +2857,7 @@ try {
           state={state}
           activePrograms={{ mensileRows: allMensileRows, domenicaRows: allDomenicaRows }}
           onSaveState={saveState}
-          isAdmin={canEdit}
+          isAdmin={currentUser?.role === 'admin'}
           onShowToast={showToast}
           checkAdminPermission={checkAdminPermission}
         />
@@ -2890,7 +2869,7 @@ try {
           state={state}
           activePrograms={{ mensileRows: allMensileRows, domenicaRows: allDomenicaRows }}
           onSaveState={saveState}
-          isAdmin={canEdit}
+          isAdmin={currentUser?.role === 'admin'}
           onShowToast={showToast}
           checkAdminPermission={checkAdminPermission}
         />
@@ -2922,7 +2901,7 @@ try {
         <DiscorsiEsterniView
           state={state}
           onSaveState={saveState}
-          isAdmin={canEdit}
+          isAdmin={currentUser?.role === 'admin'}
           onShowToast={showToast}
           checkAdminPermission={checkAdminPermission}
         />
@@ -2933,7 +2912,7 @@ try {
         <TerritoriView
           state={state}
           onSaveState={saveState}
-          isAdmin={canEdit}
+          isAdmin={currentUser?.role === 'admin'}
           onShowToast={showToast}
           checkAdminPermission={checkAdminPermission}
         />
@@ -2951,7 +2930,6 @@ try {
         />
       )}
 
-      </>}
           </main>
         </div>
       </div>

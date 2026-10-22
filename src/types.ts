@@ -5,10 +5,7 @@ export interface AuthUser {
   email?: string | null;
   displayName?: string | null;
   role: UserRole;
-  permessi?: PermessiProgrammi; // solo per 'viewer': vedi puoVedere/puoModificare in utils/utenti.js
 }
-
-export type PermessiProgrammi = Record<string, 'vede' | 'modifica'>;
 
 export interface PersonRoles {
   uscieri: boolean;

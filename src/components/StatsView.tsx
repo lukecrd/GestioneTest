@@ -69,7 +69,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
           {payload.map((entry: any, index: number) => (
             Number(entry.value) > 0 && (
               <div key={`item-${index}`} className="flex items-center justify-between gap-4">
-                <span className="flex items-center gap-1.5 text-slate-200">
+                <span className="flex items-center gap-1.5" style={{ color: entry.color }}>
                   <span className="w-2 h-2 rounded-full inline-block" style={{ backgroundColor: entry.color }} />
                   {entry.name}:
                 </span>
@@ -430,33 +430,31 @@ export const StatsView: React.FC<StatsViewProps> = ({
               Nessun dato disponibile per la sorgente selezionata. Genera o seleziona un programma.
             </div>
           ) : (
-            // Barre orizzontali: i nomi restano leggibili e l'altezza cresce col numero di persone
-            <div className="w-full mt-2" style={{ height: Math.max(220, chartBarData.length * 26 + 70) }}>
+            <div className="w-full h-[320px] mt-2">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart
                   data={chartBarData}
-                  layout="vertical"
-                  barCategoryGap="25%"
-                  margin={{ top: 0, right: 16, left: 0, bottom: 0 }}
+                  margin={{ top: 10, right: 10, left: -20, bottom: 40 }}
                 >
-                  <CartesianGrid horizontal={false} strokeDasharray="3 3" opacity={0.15} />
-                  <XAxis type="number" tick={{ fontSize: 11, fill: '#64748b' }} allowDecimals={false} />
-                  <YAxis
-                    type="category"
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                  <XAxis
                     dataKey="name"
-                    width={140}
+                    tick={{ fontSize: 11, fill: '#64748b' }}
                     interval={0}
-                    tick={{ fontSize: 12, fill: '#334155' }}
+                    angle={-35}
+                    textAnchor="end"
                   />
-                  <Tooltip content={<CustomTooltip />} cursor={{ fill: '#94a3b8', opacity: 0.12 }} />
-                  <Legend verticalAlign="top" align="left" wrapperStyle={{ paddingBottom: '8px', fontSize: '11px' }} />
-                  {/* Ordine di impilamento scelto perché i colori adiacenti restino distinguibili anche con daltonismo */}
-                  <Bar dataKey="Usciere" stackId="a" fill={ROLE_COLORS.uscieri.color} stroke="#ffffff" />
-                  <Bar dataKey="Audio / Video" stackId="a" fill={ROLE_COLORS.audioVideo.color} stroke="#ffffff" />
-                  <Bar dataKey="Presidente" stackId="a" fill={ROLE_COLORS.presidente.color} stroke="#ffffff" />
-                  <Bar dataKey="Preghiera" stackId="a" fill={ROLE_COLORS.preghiera.color} stroke="#ffffff" />
-                  <Bar dataKey="Lettore T.d.G." stackId="a" fill={ROLE_COLORS.lettore.color} stroke="#ffffff" />
-                  <Bar dataKey="Microfonista" stackId="a" fill={ROLE_COLORS.microfoni.color} stroke="#ffffff" />
+                  <YAxis tick={{ fontSize: 11, fill: '#64748b' }} allowDecimals={false} />
+                  <Tooltip content={<CustomTooltip />} />
+                  <Legend
+                    wrapperStyle={{ paddingTop: '15px', fontSize: '11px' }}
+                  />
+                  <Bar dataKey="Usciere" stackId="a" fill={ROLE_COLORS.uscieri.color} />
+                  <Bar dataKey="Audio / Video" stackId="a" fill={ROLE_COLORS.audioVideo.color} />
+                  <Bar dataKey="Microfonista" stackId="a" fill={ROLE_COLORS.microfoni.color} />
+                  <Bar dataKey="Presidente" stackId="a" fill={ROLE_COLORS.presidente.color} />
+                  <Bar dataKey="Preghiera" stackId="a" fill={ROLE_COLORS.preghiera.color} />
+                  <Bar dataKey="Lettore T.d.G." stackId="a" fill={ROLE_COLORS.lettore.color} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
