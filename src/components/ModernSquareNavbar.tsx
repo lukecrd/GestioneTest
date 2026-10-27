@@ -39,6 +39,7 @@ export const ModernSquareNavbar: React.FC<ModernSquareNavbarProps> = ({
 
   const navItems: NavItem[] = [
     { id: 'hub', label: 'Dashboard', group: 'main' },
+    { id: 'tabella', label: 'Tabella informazioni', group: 'main' },
     { id: 'anagrafica', label: 'Persone', badge: peopleCount, group: 'main' },
     { id: 'mensile', label: 'Programma mensile', group: 'programmi' },
     { id: 'domenica', label: 'Adunanza domenica', group: 'programmi' },

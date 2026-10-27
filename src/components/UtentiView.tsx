@@ -24,8 +24,12 @@ export const UtentiView: React.FC<UtentiViewProps> = ({ utenti, mioUid, onShowTo
     try {
       await azione();
       onShowToast(ok);
-    } catch {
-      onShowToast(`Modifica non riuscita per ${u.nome || u.email}. Riprova.`);
+    } catch (err) {
+      // permission-denied = le regole pubblicate in Firebase rifiutano la modifica.
+      const codice = (err as { code?: string })?.code;
+      onShowToast(codice === 'permission-denied'
+        ? `Modifica rifiutata dalle regole di Firebase per ${u.nome || u.email}: controlla di aver pubblicato firestore.rules aggiornato.`
+        : `Modifica non riuscita per ${u.nome || u.email}${codice ? ` (${codice})` : ''}. Riprova.`);
     } finally {
       setInCorso(null);
     }

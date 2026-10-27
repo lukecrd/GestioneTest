@@ -26,6 +26,7 @@ import { SECTION_META, accentStyle } from './sectionMeta';
 import { alertTerritori, normalizeTerritori } from '../utils/territori';
 
 export type SectionKey =
+  | 'tabella'
   | 'anagrafica'
   | 'mensile'
   | 'domenica'

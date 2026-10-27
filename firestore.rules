@@ -69,6 +69,16 @@ service cloud.firestore {
       allow update: if modificaProgrammi();
     }
 
+    // PDF della Tabella informazioni (src/lib/allegati.ts): li legge chi è approvato, li gestisce l'amministratore.
+    match /allegati/{id} {
+      allow read: if membro();
+      allow create, update: if amministratore()
+        && request.resource.data.keys().hasOnly(['nome', 'dati', 'caricato'])
+        && request.resource.data.dati is string
+        && request.resource.data.dati.matches('data:application/pdf;base64,.*');
+      allow delete: if amministratore();
+    }
+
     match /utenti/{uid} {
       allow read: if autenticato() && (request.auth.uid == uid || amministratore());
 

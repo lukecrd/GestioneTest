@@ -44,7 +44,7 @@ import {
   Radio,
   BookOpen,
 } from 'lucide-react';
-import { Person, StateData, MensileRow, DomenicaRow, DomenicaMonthProgram, MensileMonthProgram, ArchivedProgram, AuthUser, ChecklistProgramKey } from './types';
+import { Person, StateData, MensileRow, DomenicaRow, DomenicaMonthProgram, MensileMonthProgram, ArchivedProgram, AuthUser, ChecklistProgramKey, TabellaAllegato } from './types';
 import { StatsView } from './components/StatsView';
 import { UtentiView } from './components/UtentiView';
 import { ascoltaUtenti, ProfiloUtente } from './lib/utenti';
@@ -57,6 +57,12 @@ import { DiscorsiEsterniView } from './components/DiscorsiEsterniView';
 import { normalizeDiscorsiEsterni } from './utils/discorsiEsterni';
 import { normalizeTerritori, alertTerritori } from './utils/territori';
 import { ModernSectionHub, SectionKey } from './components/ModernSectionHub';
+import { TabellaInformazioniView, VOCI_TABELLA, ZOOM } from './components/TabellaInformazioniView';
+import { MensileProgramSheet, MensileFieldKey, fmtShort } from './components/MensileProgramSheet';
+import { WeekendProgramSheet } from './components/WeekendProgramSheet';
+import { apriPdfProgramma, creaPdf } from './utils/programPdf';
+import { ACCOUNT_DRIVE, accediDrive, caricaSuDrive } from './lib/drive';
+import { eliminaAllegato, leggiAllegato } from './lib/allegati';
 import { ModernSquareNavbar } from './components/ModernSquareNavbar';
 import { ConflittiSettimana } from './components/ConflittiSettimana';
 import { SECTION_META, accentStyle } from './components/sectionMeta';
@@ -76,7 +82,6 @@ const MENSILE_PROGRAMS_KEY = 'dashboard_congregazione_mensile_programs_v1';
 const DOMENICA_PROGRAMS_KEY = 'dashboard_congregazione_domenica_programs_v1';
 const GIORNI = ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'];
 const MESI = ['Gennaio','Febbraio','Marzo','Aprile','Maggio','Giugno','Luglio','Agosto','Settembre','Ottobre','Novembre','Dicembre'];
-const MESI_ABBR = ['gen','feb','mar','apr','mag','giu','lug','ago','set','ott','nov','dic'];
 const OCTOBRE_2026_WEEKEND: Record<string, { presidente?: string; oratore?: string; congregazione?: string; titoloDiscorso: string; lettore?: string; assemblea?: boolean }> = {
   '2026-10-04': { presidente: 'Giuseppe Facchi', oratore: 'Antonio Gramegna', congregazione: 'Gavorrano', titoloDiscorso: 'Impariamo dal diluvio dei giorni di Noè', lettore: 'Michele Verzeletti' },
   '2026-10-11': { presidente: 'Jacopo Pastorelli', oratore: 'Matteo Cannistraci', congregazione: 'Marciana Marina', titoloDiscorso: 'Imitiamo il Padre delle tenere misericordie', lettore: 'Luca Cardelli' },
@@ -115,8 +120,9 @@ function normalize(s: any): StateData {
   const programResponsibles = s.programResponsibles && typeof s.programResponsibles === 'object' ? s.programResponsibles : {};
   const territori = normalizeTerritori(s.territori);
   const discorsiEsterni = normalizeDiscorsiEsterni(s.discorsiEsterni);
+  const tabellaAllegati = s.tabellaAllegati && typeof s.tabellaAllegati === 'object' ? s.tabellaAllegati : {};
 
-  return syncRegistryLinks({ people, unavail, special, groups, mensileArchives, operaPubblica, servizioCampo, vitaEMinistero, programResponsibles, territori, discorsiEsterni });
+  return syncRegistryLinks({ people, unavail, special, groups, mensileArchives, operaPubblica, servizioCampo, vitaEMinistero, programResponsibles, territori, discorsiEsterni, tabellaAllegati });
 }
 
 function loadInitialState(): StateData {
@@ -144,10 +150,6 @@ function iso(dt: Date) {
   return dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0') + '-' + String(dt.getDate()).padStart(2, '0');
 }
 
-function fmtShort(dt: Date) {
-  return dt.getDate() + '-' + MESI_ABBR[dt.getMonth()];
-}
-
 function fmtDate(dt: Date) {
   return String(dt.getDate()).padStart(2, '0') + '/' + String(dt.getMonth() + 1).padStart(2, '0') + '/' + dt.getFullYear();
 }
@@ -156,6 +158,27 @@ function addDays(dt: Date, n: number) {
   const d = new Date(dt);
   d.setDate(d.getDate() + n);
   return d;
+}
+
+// Righe del programma domenicale come le mostrano la sezione e il PDF: completa Ottobre 2026 dai dati importati
+// e, se il mese ha meno di 5 domeniche, aggiunge una domenica vuota in fondo.
+function weekendDisplayRows(domRows: DomenicaRow[] | null, domTitle: string) {
+  const importedOctoberRows = domRows?.map(row => {
+    const sample = domTitle === 'Ottobre 2026' ? OCTOBRE_2026_WEEKEND[iso(row.date)] : undefined;
+    if (!sample || row.titoloDiscorso !== undefined) return row;
+    return {
+      ...row,
+      presidente: sample.presidente || '',
+      oratore: sample.oratore || '',
+      congregazione: sample.congregazione || '',
+      titoloDiscorso: sample.titoloDiscorso,
+      lettore: sample.lettore || '',
+      special: sample.assemblea ? sample.titoloDiscorso : row.special,
+    };
+  });
+  return importedOctoberRows && importedOctoberRows.length > 0 && importedOctoberRows.length < 5
+    ? [...importedOctoberRows, { date: addDays(importedOctoberRows[importedOctoberRows.length - 1].date, 7), placeholder: true, oratore: '', congregazione: '', titoloDiscorso: '', presidente: '', lettore: '' }]
+    : importedOctoberRows;
 }
 
 function sundayDates(year: number, month: number) {
@@ -658,6 +681,17 @@ export default function App({ utente, onEsci }: { utente: AuthUser; onEsci: () =
     showToast(name || email ? 'Responsabile aggiornato' : 'Responsabile rimosso');
   };
 
+  const salvaAllegatoTabella = (chiave: string, allegato: TabellaAllegato | null) => {
+    if (currentUser.role !== 'admin') { showToast('Solo un amministratore può collegare link e PDF'); return; }
+    const { [chiave]: precedente, ...altri } = state.tabellaAllegati || {};
+    saveState({ ...state, tabellaAllegati: allegato ? { ...altri, [chiave]: allegato } : altri });
+    // Il PDF sostituito o rimosso non serve più: lo si cancella dopo aver salvato il nuovo riferimento.
+    if (precedente?.fileId && precedente.fileId !== allegato?.fileId) {
+      eliminaAllegato(precedente.fileId).catch(() => showToast('Collegamento aggiornato, ma il vecchio PDF non è stato eliminato'));
+    }
+    showToast(allegato ? 'Collegamento salvato' : 'Collegamento rimosso');
+  };
+
   // --- PROGRAMMA MENSILE STATE ---
   const now = new Date();
   const initialMenSelection = readProgramSelection(storage.get(MENSILE_PROGRAMS_KEY + '_selection'), now);
@@ -862,7 +896,6 @@ export default function App({ utente, onEsci }: { utente: AuthUser; onEsci: () =
     return { duplicates, warnings };
   };
 
-  type MensileFieldKey = 'ingresso0' | 'ingresso1' | 'auditorium' | 'microfoni0' | 'microfoni1' | 'audioVideo0' | 'audioVideo1';
 
   // Cambia manualmente il nominativo assegnato a un incarico di una riga del programma mensile
   const updateMensileField = (rowIndex: number, field: MensileFieldKey, newName: string) => {
@@ -1224,26 +1257,98 @@ try {
   const domRows = domProgram?.rows ?? null;
   const domWarn = domProgram?.warn ?? null;
   const domTitle = domProgram?.title || `${MESI[domMonth]} ${domYear}`;
-  const importedOctoberRows = domRows?.map(row => {
-    const sample = domTitle === 'Ottobre 2026' ? OCTOBRE_2026_WEEKEND[iso(row.date)] : undefined;
-    if (!sample || row.titoloDiscorso !== undefined) return row;
-    return {
-      ...row,
-      presidente: sample.presidente || '',
-      oratore: sample.oratore || '',
-      congregazione: sample.congregazione || '',
-      titoloDiscorso: sample.titoloDiscorso,
-      lettore: sample.lettore || '',
-      special: sample.assemblea ? sample.titoloDiscorso : row.special,
-    };
-  });
-  const domenicaProgramRows = importedOctoberRows && importedOctoberRows.length > 0 && importedOctoberRows.length < 5
-    ? [...importedOctoberRows, { date: addDays(importedOctoberRows[importedOctoberRows.length - 1].date, 7), placeholder: true, oratore: '', congregazione: '', titoloDiscorso: '', presidente: '', lettore: '' }]
-    : importedOctoberRows;
+  const domenicaProgramRows = weekendDisplayRows(domRows, domTitle);
 
   const allDomenicaRows = Object.values(domPrograms).flatMap(program => program.rows || []);
   // Stesso nominativo in più ruoli nella stessa settimana, su tutti i programmi.
   const conflittiRuoli = activeTab in PROGRAMMI ? weeklyRoleConflicts(state, { mensileRows: allMensileRows, domenicaRows: allDomenicaRows }) : [];
+
+  // --- PDF DEI PROGRAMMI (Tabella informazioni): programma del mese in corso, generato al clic ---
+  const foglioPdf = (sezione: SectionKey): React.ReactElement | null => {
+    const y = now.getFullYear();
+    const m = now.getMonth();
+    const delMese = (dateStr?: string) => !!dateStr && dateStr.startsWith(`${y}-${String(m + 1).padStart(2, '0')}`);
+    const testo = (value?: string) => (value && value !== '—' ? value : '');
+    // Solo lettura: la vista disegnata per il PDF non deve mai salvare.
+    const vista = { activePrograms: { mensileRows: allMensileRows, domenicaRows: allDomenicaRows }, onSaveState: () => {}, isAdmin: false, onShowToast: () => {}, checkAdminPermission: () => false, stampa: true };
+    switch (sezione) {
+      case 'mensile': {
+        const programma = menPrograms[domenicaPeriodKey(y, m)];
+        if (!programma?.rows?.length) return null;
+        return <MensileProgramSheet rows={programma.rows} title={programma.title || `${MESI[m]} ${y}`} warn={null}
+          cell={(_i, _f, value) => testo(value) || '—'} group={(_i, _f, value) => value || '—'} />;
+      }
+      case 'domenica': {
+        const programma = selectDomenicaProgram(domPrograms, y, m);
+        const title = programma?.title || `${MESI[m]} ${y}`;
+        const rows = weekendDisplayRows(programma?.rows ?? null, title);
+        if (!rows?.length) return null;
+        return <WeekendProgramSheet rows={rows} monthLabel={title.split(' ')[0] || MESI[m]} field={(_i, _k, value) => testo(value)} />;
+      }
+      case 'vitaEMinistero': {
+        const meetings = (state.vitaEMinistero?.meetings || []).filter(mt => delMese(mt.dateStr));
+        if (!meetings.length) return null;
+        return <VitaEMinisteroView {...vista} state={{ ...state, vitaEMinistero: { ...state.vitaEMinistero!, meetings } }} />;
+      }
+      case 'servizioCampo':
+        return (state.servizioCampo?.schedule || []).some(s => delMese(s.dateStr)) ? <ServizioCampoView {...vista} state={state} /> : null;
+      case 'operaPubblica':
+        return (state.operaPubblica?.schedule || []).some(s => delMese(s.dateStr)) ? <OperaPubblicaView {...vista} state={state} /> : null;
+      default:
+        return null;
+    }
+  };
+
+  // Tabella informazioni in PDF (un foglio A4, a due colonne come il manifesto) salvata sull'account Drive configurato.
+  // Ogni riquadro è un link: i PDF dei programmi del mese e quelli caricati vengono messi su Drive come pubblici (con link).
+  const salvaTabellaSuDrive = async () => {
+    try {
+      const token = await accediDrive(); // prima di tutto: il popup di Google deve partire dal clic
+      const mese = `${MESI[now.getMonth()]} ${now.getFullYear()}`;
+      const nome = `Tabella Informazioni - ${mese}.pdf`;
+      const link: Record<string, string> = { zoom: ZOOM.url };
+      const perSezione: Partial<Record<SectionKey, string>> = {}; // incarichi settimanali e pulizie: stesso PDF mensile
+      for (const voce of VOCI_TABELLA) {
+        const allegato = state.tabellaAllegati?.[voce.img];
+        if (voce.sezione) {
+          if (!(voce.sezione in perSezione)) {
+            const foglio = foglioPdf(voce.sezione);
+            if (!foglio) continue; // programma del mese non ancora pronto: riquadro senza link
+            showToast(`Drive: carico "${voce.titolo}"…`);
+            const titolo = `${voce.titolo} - ${mese}`;
+            perSezione[voce.sezione] = (await caricaSuDrive(token, await creaPdf(foglio, titolo), `${titolo}.pdf`, { pubblico: true })).webViewLink;
+          }
+          link[voce.img] = perSezione[voce.sezione]!;
+        } else if (allegato?.fileId) {
+          showToast(`Drive: carico "${voce.titolo}"…`);
+          const file = await leggiAllegato(allegato.fileId);
+          link[voce.img] = (await caricaSuDrive(token, file, allegato.nome || `${voce.titolo}.pdf`, { pubblico: true })).webViewLink;
+        } else if (allegato?.url) {
+          link[voce.img] = allegato.url;
+        }
+      }
+      const tabella = (
+        <TabellaInformazioniView onSelectSection={() => {}} visibile={sez => puoVedere(currentUser, sez)} allegati={state.tabellaAllegati || {}}
+          isAdmin={false} onSalvaAllegato={() => {}} onErrore={() => {}} onApriPdf={() => Promise.resolve()} />
+      );
+      const pdf = await creaPdf(tabella, nome, { stampa: false, larghezzaPx: 1000, finestraPx: 1280, unaPagina: true, link });
+      await caricaSuDrive(token, pdf, nome);
+      showToast(`Tabella salvata su Drive (${ACCOUNT_DRIVE}): ${nome}`);
+    } catch (err: any) {
+      console.error(err);
+      showToast(err?.message || 'Salvataggio su Drive non riuscito');
+    }
+  };
+
+  const apriPdfSezione = (sezione: SectionKey, titolo: string) => {
+    const foglio = foglioPdf(sezione);
+    if (!foglio) {
+      showToast(`Il programma "${titolo}" di ${MESI[now.getMonth()]} ${now.getFullYear()} non è ancora pronto`);
+      return Promise.resolve();
+    }
+    return apriPdfProgramma(foglio, `${titolo} - ${MESI[now.getMonth()]} ${now.getFullYear()}`)
+      .catch(err => { console.error(err); showToast('Non è stato possibile creare il PDF'); });
+  };
 
   const generateDomenica = (y: number, m: number) => {
     if (!checkAdminPermission()) return;
@@ -1582,6 +1687,7 @@ try {
 
   const activeSectionTitle: Record<SectionKey | 'hub', string> = {
     hub: 'Dashboard',
+    tabella: 'Tabella informazioni',
     anagrafica: 'Persone',
     mensile: 'Programma mensile',
     domenica: 'Adunanza domenica',
@@ -1673,6 +1779,19 @@ try {
           visibile={sez => puoVedere(currentUser, sez)}
           currentUserRole={currentUser?.role}
           onUpdateResponsible={updateProgramResponsible}
+        />
+      )}
+
+      {activeTab === 'tabella' && (
+        <TabellaInformazioniView
+          onSelectSection={(sec) => setActiveTab(sec)}
+          visibile={sez => puoVedere(currentUser, sez)}
+          allegati={state.tabellaAllegati || {}}
+          isAdmin={currentUser.role === 'admin'}
+          onSalvaAllegato={salvaAllegatoTabella}
+          onErrore={showToast}
+          onApriPdf={apriPdfSezione}
+          onSalvaDrive={currentUser.role === 'admin' ? salvaTabellaSuDrive : undefined}
         />
       )}
 
@@ -2349,90 +2468,21 @@ try {
             const uscieriOptions = state.people.filter(p => p.roles.uscieri).sort((a, b) => a.name.localeCompare(b.name));
             const microfoniOptions = state.people.filter(p => p.roles.microfoni).sort((a, b) => a.name.localeCompare(b.name));
             const audioVideoOptions = state.people.filter(p => p.roles.console).sort((a, b) => a.name.localeCompare(b.name));
+            const poolFor = (field: MensileFieldKey) =>
+              field.startsWith('microfoni') ? microfoniOptions : field.startsWith('audioVideo') ? audioVideoOptions : uscieriOptions;
             return (
-            <div className="print-sheet">
-              {canEdit && (
-                <p className="text-xs text-slate-500 dark:text-slate-400 mb-2 no-print">
-                  Clicca su un nominativo per assegnare un'altra persona all'incarico.
-                </p>
-              )}
-              <div className="prog-banner">
-                <img className="prog-banner__image" src="/programma-mensile-header.jpg" alt="" />
-                <div className="prog-title">Programma<br />Uscieri - Microfonisti - Audio / Video -<br />Riassetto e Pulizie</div>
-                <div className="prog-month">Mese di {menTitle}</div>
-              </div>
-              <div className="table-wrapper">
-                <table className="prog-table">
-                  <thead>
-                    <tr>
-                      <th className="w-week" rowSpan={2}>Settimana<br />del:</th>
-                      <th><div>Uscieri ingresso</div><img className="prog-th-image" src="/mensile-ingresso.jpg" alt="" /></th>
-                      <th><div>Usciere<br />Auditorium</div><img className="prog-th-image" src="/mensile-auditorium.jpg" alt="" /></th>
-                      <th><div>Microfonisti</div><img className="prog-th-image" src="/mensile-microfoni.jpg" alt="" /></th>
-                      <th><div>Audio Video</div><img className="prog-th-image" src="/mensile-audio-video.jpg" alt="" /></th>
-                      <th><div>Riassetto</div><img className="prog-th-image" src="/mensile-riassetto.jpg" alt="" /></th>
-                      <th><div>Pulizie del<br />fine settimana</div><img className="prog-th-image" src="/mensile-pulizie.jpg" alt="" /></th>
-                    </tr>
-                    <tr className="prog-subheader">
-                      <th>Nominativo</th>
-                      <th>Nominativo</th>
-                      <th>Nominativo</th>
-                      <th>Nominativo</th>
-                      <th>Gruppo</th>
-                      <th>Gruppo</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {menRows.map((r, i) => {
-                      if (r.special) {
-                        return (
-                          <React.Fragment key={i}>
-                            <tr className="special-row">
-                              <td className="week-cell">{fmtShort(mensileWeekStart(r.date))}</td>
-                              <td colSpan={6}>{r.special}</td>
-                            </tr>
-                            {i < menRows.length - 1 && (
-                              <tr className="week-spacer"><td colSpan={7} /></tr>
-                            )}
-                          </React.Fragment>
-                        );
-                      }
-                      const hasDup = r.duplicates && r.duplicates.length > 0;
-                      const rowClass = hasDup ? 'week-row-warn' : undefined;
-                      return (
-                        <React.Fragment key={i}>
-                          <tr className={rowClass}>
-                            <td className="week-cell" rowSpan={2}>
-                              <div className="flex items-center justify-center gap-1">
-                                {hasDup && (
-                                  <span className="text-amber-600 font-bold text-sm" title={r.warnings?.join('\n')}>⚠</span>
-                                )}
-                                <span>{fmtShort(mensileWeekStart(r.date))}</span>
-                              </div>
-                            </td>
-                            <td>{renderMensileCell(i, 'ingresso0', r.ingresso?.[0], uscieriOptions, r.duplicates)}</td>
-                            <td rowSpan={2}>{renderMensileCell(i, 'auditorium', r.auditorium, uscieriOptions, r.duplicates)}</td>
-                            <td>{renderMensileCell(i, 'microfoni0', r.microfoni?.[0], microfoniOptions, r.duplicates)}</td>
-                            <td>{renderMensileCell(i, 'audioVideo0', r.audioVideo?.[0], audioVideoOptions, r.duplicates)}</td>
-                            <td className="group-cell" rowSpan={2}>{renderGroupCell(i, 'riassetto', r.riassetto)}</td>
-                            <td className="group-cell" rowSpan={2}>{renderGroupCell(i, 'pulizie', r.pulizie)}</td>
-                          </tr>
-                          <tr className={rowClass}>
-                            <td>{renderMensileCell(i, 'ingresso1', r.ingresso?.[1], uscieriOptions, r.duplicates)}</td>
-                            <td>{renderMensileCell(i, 'microfoni1', r.microfoni?.[1], microfoniOptions, r.duplicates)}</td>
-                            <td>{renderMensileCell(i, 'audioVideo1', r.audioVideo?.[1], audioVideoOptions, r.duplicates)}</td>
-                          </tr>
-                          {i < menRows.length - 1 && (
-                            <tr className="week-spacer"><td colSpan={7} /></tr>
-                          )}
-                        </React.Fragment>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              {menWarn && <div className="warn">⚠ {menWarn}</div>}
-            </div>
+              <MensileProgramSheet
+                rows={menRows}
+                title={menTitle}
+                warn={menWarn}
+                cell={(i, field, value, duplicates) => renderMensileCell(i, field, value, poolFor(field), duplicates)}
+                group={renderGroupCell}
+                hint={canEdit && (
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-2 no-print">
+                    Clicca su un nominativo per assegnare un'altra persona all'incarico.
+                  </p>
+                )}
+              />
             );
           })()}
         </section>
@@ -2497,67 +2547,36 @@ try {
             </div>
           )}
           {domenicaProgramRows && (
-            <div className="weekend-program">
-              <div className="no-print flex flex-wrap justify-end gap-2 p-3">
-                <button onClick={() => window.print()} className="btn-ghost" title="Apri la stampa del programma">
-                  <Printer className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                  <span>Stampa</span>
-                </button>
-                <button onClick={() => window.print()} className="btn-ghost" title="Scegli Salva come PDF nella finestra di stampa">
-                  <Download className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                  <span>Esporta PDF</span>
-                </button>
-                <button
-                  onClick={exportDomenicaToExcel}
-                  className="btn-ghost text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 hover:bg-emerald-100"
-                  title="Esporta in formato Excel (.xlsx)"
-                >
-                  <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
-                  <span>Esporta Excel (.xlsx)</span>
-                </button>
-              </div>
-              <header className="weekend-program__banner">
-                <div className="weekend-program__banner-title">
-                  <img className="weekend-program__banner-image" src="/adunanza-header.jpg" alt="" />
-                  <h2>Programma Adunanza del fine settimana</h2>
-                  <p>Mese di {domTitle.split(' ')[0] || MESI[domMonth]}</p>
+            <WeekendProgramSheet
+              rows={domenicaProgramRows}
+              monthLabel={domTitle.split(' ')[0] || MESI[domMonth]}
+              field={renderDomenicaField}
+              toolbar={
+                <div className="no-print flex flex-wrap justify-end gap-2 p-3">
+                  <button onClick={() => window.print()} className="btn-ghost" title="Apri la stampa del programma">
+                    <Printer className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                    <span>Stampa</span>
+                  </button>
+                  <button onClick={() => window.print()} className="btn-ghost" title="Scegli Salva come PDF nella finestra di stampa">
+                    <Download className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                    <span>Esporta PDF</span>
+                  </button>
+                  <button
+                    onClick={exportDomenicaToExcel}
+                    className="btn-ghost text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/30 hover:bg-emerald-100"
+                    title="Esporta in formato Excel (.xlsx)"
+                  >
+                    <FileSpreadsheet className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                    <span>Esporta Excel (.xlsx)</span>
+                  </button>
                 </div>
-                <div className="weekend-program__illustration-wrap">
-                  <img className="weekend-program__illustration" src="/adunanza-illustrazione.jpg" alt="Oratore che tiene un discorso davanti alla congregazione" />
-                </div>
-              </header>
+              }
+              warn={domWarn && <div className="warn no-print"><AlertTriangle className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400" /> <span>{domWarn}</span></div>}
+            >
               <datalist id="titoli-discorso-pubblico">
                 {SCHEMI_DISCORSI_PUBBLICI.map(s => <option key={s.numero} value={s.titolo} label={`n. ${s.numero}`} />)}
               </datalist>
-              <div className="weekend-program__weeks">
-                {domenicaProgramRows.map((row, index) => {
-                  const dateLabel = row.placeholder ? 'Domenica' : `Domenica ${String(row.date.getDate()).padStart(2, '0')}`;
-                  return (
-                    <article key={`${row.date.toISOString()}-${index}`} className="weekend-program__week">
-                      <h3>{dateLabel}</h3>
-                      <dl>
-                        <div className="weekend-program__line">
-                          <dt>Presidente</dt><dd>{renderDomenicaField(index, 'presidente', row.presidente)}</dd>
-                        </div>
-                        <div className="weekend-program__line">
-                          <dt>Oratore</dt><dd>{renderDomenicaField(index, 'oratore', row.oratore)}</dd>
-                        </div>
-                        <div className="weekend-program__line">
-                          <dt>Congregazione</dt><dd>{renderDomenicaField(index, 'congregazione', row.congregazione)}</dd>
-                        </div>
-                        <div className="weekend-program__line weekend-program__line--topic">
-                          <dt>Tema Discorso</dt><dd>{renderDomenicaField(index, 'titoloDiscorso', row.titoloDiscorso ?? row.special)}</dd>
-                        </div>
-                        <div className="weekend-program__line">
-                          <dt>Lettore TdG</dt><dd>{renderDomenicaField(index, 'lettore', row.lettore)}</dd>
-                        </div>
-                      </dl>
-                    </article>
-                  );
-                })}
-              </div>
-              {domWarn && <div className="warn no-print"><AlertTriangle className="w-4 h-4 shrink-0 text-amber-600 dark:text-amber-400" /> <span>{domWarn}</span></div>}
-            </div>
+            </WeekendProgramSheet>
           )}
         </section>
       )}

@@ -350,6 +350,14 @@ export interface StateData {
   programResponsibles?: Partial<Record<ChecklistProgramKey, ProgramResponsible>>;
   territori?: TerritoriData;
   discorsiEsterni?: DiscorsiEsterniData;
+  tabellaAllegati?: Record<string, TabellaAllegato>; // riquadro della Tabella informazioni -> link o PDF
+}
+
+// url: link esterno; fileId: PDF salvato in Firestore (collezione "allegati").
+export interface TabellaAllegato {
+  url?: string;
+  fileId?: string;
+  nome?: string;
 }
 
 export interface MensileRow {
