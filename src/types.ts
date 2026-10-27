@@ -5,7 +5,10 @@ export interface AuthUser {
   email?: string | null;
   displayName?: string | null;
   role: UserRole;
+  permessi?: PermessiProgrammi; // solo per 'viewer': vedi puoVedere/puoModificare in utils/utenti.js
 }
+
+export type PermessiProgrammi = Record<string, 'vede' | 'modifica'>;
 
 export interface PersonRoles {
   uscieri: boolean;
@@ -347,6 +350,14 @@ export interface StateData {
   programResponsibles?: Partial<Record<ChecklistProgramKey, ProgramResponsible>>;
   territori?: TerritoriData;
   discorsiEsterni?: DiscorsiEsterniData;
+  tabellaAllegati?: Record<string, TabellaAllegato>; // riquadro della Tabella informazioni -> link o PDF
+}
+
+// url: link esterno; fileId: PDF salvato in Firestore (collezione "allegati").
+export interface TabellaAllegato {
+  url?: string;
+  fileId?: string;
+  nome?: string;
 }
 
 export interface MensileRow {

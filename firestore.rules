@@ -28,10 +28,55 @@ service cloud.firestore {
       return request.auth.token.email == 'luca.cardelli@gmail.com';
     }
 
-    // Dati della congregazione: li legge chi è approvato, li modifica solo un amministratore.
+    // Permesso "modifica" su un programma, assegnato dall'amministratore nel profilo (campo permessi).
+    function permesso(programma) {
+      return membro() && profilo().get('permessi', {}).get(programma, '') == 'modifica';
+    }
+
+    // Chiavi cambiate dentro una mappa del documento (state o activePrograms).
+    function cambiate(campo) {
+      return request.resource.data.get(campo, {}).diff(resource.data.get(campo, {})).affectedKeys();
+    }
+
+    function soloSe(chiavi, elenco, programma) {
+      return !chiavi.hasAny(elenco) || permesso(programma);
+    }
+
+    // Chi ha permessi su singoli programmi tocca solo quelle parti (stesso elenco di chiaviStatoModificabili).
+    function modificaProgrammi() {
+      let s = cambiate('state');
+      let ap = cambiate('activePrograms');
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(['state', 'activePrograms', 'updatedAt'])
+        && s.hasOnly(['mensileArchives', 'vitaEMinistero', 'discorsiEsterni', 'servizioCampo', 'operaPubblica', 'territori'])
+        && ap.hasOnly(['menPrograms', 'menRows', 'menTitle', 'menWarn', 'menMonth', 'menYear',
+                       'domPrograms', 'domRows', 'domTitle', 'domWarn', 'domMonth', 'domYear'])
+        && soloSe(s, ['mensileArchives'], 'mensile')
+        && soloSe(s, ['vitaEMinistero'], 'vitaEMinistero')
+        && soloSe(s, ['discorsiEsterni'], 'discorsiEsterni')
+        && soloSe(s, ['servizioCampo'], 'servizioCampo')
+        && soloSe(s, ['operaPubblica'], 'operaPubblica')
+        && soloSe(s, ['territori'], 'territori')
+        && soloSe(ap, ['menPrograms', 'menRows', 'menTitle', 'menWarn', 'menMonth', 'menYear'], 'mensile')
+        && soloSe(ap, ['domPrograms', 'domRows', 'domTitle', 'domWarn', 'domMonth', 'domYear'], 'domenica')
+        && (s.size() > 0 || ap.size() > 0);
+    }
+
+    // Dati della congregazione: li legge chi è approvato; li modifica un amministratore,
+    // oppure chi ha il permesso sul programma che sta cambiando.
     match /congregationData/{docId} {
       allow read: if membro();
       allow write: if amministratore();
+      allow update: if modificaProgrammi();
+    }
+
+    // PDF della Tabella informazioni (src/lib/allegati.ts): li legge chi è approvato, li gestisce l'amministratore.
+    match /allegati/{id} {
+      allow read: if membro();
+      allow create, update: if amministratore()
+        && request.resource.data.keys().hasOnly(['nome', 'dati', 'caricato'])
+        && request.resource.data.dati is string
+        && request.resource.data.dati.matches('data:application/pdf;base64,.*');
+      allow delete: if amministratore();
     }
 
     match /utenti/{uid} {
@@ -48,15 +93,16 @@ service cloud.firestore {
         && (request.resource.data.ruolo == 'in_attesa'
             || (request.resource.data.ruolo == 'admin' && amministratoreIniziale()));
 
-      // L'utente può cambiare solo il proprio nome. Un amministratore cambia il ruolo degli altri,
+      // L'utente può cambiare solo il proprio nome. Un amministratore cambia ruolo e permessi degli altri,
       // mai il proprio (così non resta chiuso fuori per sbaglio).
       allow update: if (autenticato()
           && request.auth.uid == uid
           && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['nome']))
         || (amministratore()
           && request.auth.uid != uid
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ruolo'])
-          && request.resource.data.ruolo in ['in_attesa', 'viewer', 'admin']);
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ruolo', 'permessi'])
+          && request.resource.data.ruolo in ['in_attesa', 'viewer', 'admin']
+          && request.resource.data.get('permessi', {}) is map);
 
       allow delete: if amministratore() && request.auth.uid != uid;
     }

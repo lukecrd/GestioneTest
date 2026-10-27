@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test:scheduling": "node --import tsx --test tests/automaticScheduling.test.mjs tests/domenicaPrograms.test.mjs tests/mensilePrograms.test.mjs tests/territori.test.mjs tests/discorsiEsterni.test.mjs tests/utenti.test.mjs"
+    "test:scheduling": "node --import tsx --test tests/automaticScheduling.test.mjs tests/domenicaPrograms.test.mjs tests/mensilePrograms.test.mjs tests/territori.test.mjs tests/discorsiEsterni.test.mjs tests/utenti.test.mjs tests/programPdf.test.mjs"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
@@ -21,6 +21,7 @@
     "exceljs": "^4.4.0",
     "express": "^4.21.2",
     "firebase": "^12.17.1",
+    "html2canvas-pro": "^2.5.2",
     "jspdf": "^4.2.1",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
@@ -31,13 +32,13 @@
     "xlsx": "^0.18.5"
   },
   "devDependencies": {
+    "@types/express": "^4.17.21",
     "@types/node": "^22.14.0",
     "autoprefixer": "^10.4.21",
     "esbuild": "^0.25.0",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
     "typescript": "~5.8.2",
-    "vite": "^6.2.3",
-    "@types/express": "^4.17.21"
+    "vite": "^6.2.3"
   }
 }

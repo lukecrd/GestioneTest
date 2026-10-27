@@ -66,6 +66,7 @@ interface VitaEMinisteroViewProps {
   isAdmin: boolean;
   onShowToast: (msg: string) => void;
   checkAdminPermission: () => boolean;
+  stampa?: boolean; // apre direttamente la sottoscheda di stampa (PDF della Tabella informazioni)
 }
 
 const MESI_FULL = [
@@ -80,9 +81,10 @@ export function VitaEMinisteroView({
   isAdmin,
   onShowToast,
   checkAdminPermission,
+  stampa,
 }: VitaEMinisteroViewProps) {
   // Current active sub-tab
-  const [activeSubTab, setActiveSubTab] = useState<'programma' | 'nominativi' | 'statistiche' | 'stampa'>('programma');
+  const [activeSubTab, setActiveSubTab] = useState<'programma' | 'nominativi' | 'statistiche' | 'stampa'>(stampa ? 'stampa' : 'programma');
 
   const [generationWarnings, setGenerationWarnings] = useState<string[]>([]);
 

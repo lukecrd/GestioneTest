@@ -66,16 +66,22 @@ export function createSchedulingLedger(state, programs = {}, excluded = {}) {
     return matches.some(p => keys.some(date => state.unavail?.[p.id]?.includes(date)));
   };
   const excludedDates = new Set(excluded.dates || []);
-  const add = (program, record, dates) => {
-    reserve(record, (typeof dates === 'string' ? [dates] : dates)
-      .filter(date => !(excluded.program === program && excludedDates.has(date))));
+  // Every assignment, for the weekly multi-role check (see weeklyRoleConflicts).
+  const entries = [];
+  const add = (program, record, dates, role, busy = true) => {
+    const list = (typeof dates === 'string' ? [dates] : dates).filter(Boolean);
+    const key = identity(record);
+    const name = byId.get(record?.personId || record?.id)?.name || byName.get(personNameKey(record?.name || ''))?.[0].name || record?.name;
+    if (key) list.forEach(date => entries.push({ key, name, program, role, date }));
+    if (busy) reserve(record, list.filter(date => !(excluded.program === program && excludedDates.has(date))));
   };
   const named = name => ({ name });
   const monthly = row => {
     if (row.special || row.placeholder) return;
     const dates = weeklyDates(row.date || row.dateStr);
-    const names = [...(row.ingresso || []), row.auditorium, ...(row.microfoni || []), ...(row.audioVideo || [])];
-    names.filter(validName).forEach(name => add('mensile', named(name), dates));
+    const slots = [...(row.ingresso || []).map(n => [n, 'Usciere ingresso']), [row.auditorium, 'Usciere auditorium'],
+      ...(row.microfoni || []).map(n => [n, 'Microfoni']), ...(row.audioVideo || []).map(n => [n, 'Audio/Video'])];
+    slots.filter(([name]) => validName(name)).forEach(([name, role]) => add('mensile', named(name), dates, role));
   };
   // Most recently saved archive wins; the active programme overrides its dates.
   const monthlyRows = new Map();
@@ -85,39 +91,71 @@ export function createSchedulingLedger(state, programs = {}, excluded = {}) {
   monthlyRows.forEach(monthly);
   (programs.domenicaRows || []).forEach(row => {
     if (row.special || row.placeholder) return;
-    [row.presidente, row.lettore, row.oratore].filter(validName).forEach(name =>
-      add('domenica', named(name), dateKey(row.date)));
+    [[row.presidente, 'Presidente'], [row.lettore, 'Lettore'], [row.oratore, 'Oratore']].filter(([name]) => validName(name))
+      .forEach(([name, role]) => add('domenica', named(name), dateKey(row.date), role));
   });
   const vm = state.vitaEMinistero;
   const vmById = new Map((vm?.participants || []).map(p => [p.id, p]));
   (vm?.meetings || []).forEach(meeting => {
     if (meeting.isSpecialEvent) return;
-    vitaAssignmentIds(meeting).forEach(id => add('vitaEMinistero', vmById.get(id), meeting.dateStr));
+    vitaAssignments(meeting).forEach(([id, role]) => add('vitaEMinistero', vmById.get(id), meeting.dateStr, role));
   });
   const field = state.servizioCampo;
   const fieldById = new Map((field?.conductors || []).map(p => [p.id, p]));
   (field?.schedule || []).forEach(meeting => {
-    if (meeting.isActive !== false) add('servizioCampo', fieldById.get(meeting.conductorId), meeting.dateStr);
+    if (meeting.isActive !== false) add('servizioCampo', fieldById.get(meeting.conductorId), meeting.dateStr, 'Conduttore');
   });
   const publicWork = state.operaPubblica;
   const publicById = new Map((publicWork?.participants || []).map(p => [p.id, p]));
   (publicWork?.schedule || []).forEach(day => {
-    if (day.turno1Active !== false) (day.turno1 || []).forEach(id => add('operaPubblica', publicById.get(id), day.dateStr));
-    if (day.turno2Active !== false) (day.turno2 || []).forEach(id => add('operaPubblica', publicById.get(id), day.dateStr));
+    if (day.turno1Active !== false) (day.turno1 || []).forEach(id => add('operaPubblica', publicById.get(id), day.dateStr, 'Turno'));
+    if (day.turno2Active !== false) (day.turno2 || []).forEach(id => add('operaPubblica', publicById.get(id), day.dateStr, 'Turno'));
   });
-  return { identity, reserve, isBusy, isUnavailable };
+  // Outgoing talks only feed the multi-role check: they never blocked automatic scheduling.
+  (state.discorsiEsterni?.uscite || []).forEach(u => add('discorsiEsterni', named(u.oratore), u.data, 'Discorso esterno', false));
+  return { identity, reserve, isBusy, isUnavailable, entries };
+}
+
+/** Monday (YYYY-MM-DD) of the Monday–Sunday week containing the date. */
+export function weekKey(value) {
+  const key = dateKey(value);
+  if (!key) return '';
+  const date = new Date(key + 'T12:00:00');
+  date.setDate(date.getDate() - (date.getDay() + 6) % 7);
+  return dateKey(date);
+}
+
+/** People holding two or more different roles (across all programmes) in the same week. */
+export function weeklyRoleConflicts(state, programs = {}) {
+  const groups = new Map();
+  for (const entry of createSchedulingLedger(state, programs).entries) {
+    const week = weekKey(entry.date);
+    if (!week) continue;
+    const id = week + '|' + entry.key;
+    const group = groups.get(id) || { week, name: entry.name, roles: new Map() };
+    group.roles.set(entry.program + '|' + entry.role, { program: entry.program, role: entry.role });
+    groups.set(id, group);
+  }
+  return [...groups.values()].filter(g => g.roles.size > 1)
+    .map(g => ({ week: g.week, name: g.name, roles: [...g.roles.values()] }))
+    .sort((a, b) => a.week.localeCompare(b.week) || a.name.localeCompare(b.name, 'it'));
+}
+
+function vitaAssignments(meeting) {
+  if (meeting.isSpecialEvent) return [];
+  return [
+    [meeting.presidenteId, 'Presidente'], [meeting.preghieraInizialeId, 'Preghiera iniziale'],
+    [meeting.tesori1SpeakerId, 'Discorso Tesori'], [meeting.tesoriGemmeSpeakerId, 'Gemme spirituali'],
+    [meeting.tesoriLetturaReaderId, 'Lettura biblica'],
+    ...(meeting.ministeroParts || []).flatMap(p => [[p.studentId, 'Studente ministero'], [p.hasAssistant ? p.assistantId : '', 'Assistente ministero']]),
+    ...(meeting.vitaCristianaParts || []).map(p => [p.speakerId, 'Parte Vita cristiana']),
+    ...(meeting.studioBiblicoType === 'discorsoSorvegliante' ? [] : [[meeting.studioBiblicoConductorId, 'Conduttore studio biblico'], [meeting.studioBiblicoReaderId, 'Lettore studio biblico']]),
+    [meeting.preghieraFinaleId, 'Preghiera finale'],
+  ].filter(([id]) => id);
 }
 
 export function vitaAssignmentIds(meeting) {
-  if (meeting.isSpecialEvent) return [];
-  return [
-    meeting.presidenteId, meeting.preghieraInizialeId, meeting.tesori1SpeakerId,
-    meeting.tesoriGemmeSpeakerId, meeting.tesoriLetturaReaderId,
-    ...(meeting.ministeroParts || []).flatMap(p => [p.studentId, p.hasAssistant ? p.assistantId : '']),
-    ...(meeting.vitaCristianaParts || []).map(p => p.speakerId),
-    ...(meeting.studioBiblicoType === 'discorsoSorvegliante' ? [] : [meeting.studioBiblicoConductorId, meeting.studioBiblicoReaderId]),
-    meeting.preghieraFinaleId,
-  ].filter(Boolean);
+  return vitaAssignments(meeting).map(([id]) => id);
 }
 
 /** Fill scarce roles first; relocate a previous choice only to fill a blocked role. */

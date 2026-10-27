@@ -62,6 +62,7 @@ interface ServizioCampoViewProps {
   isAdmin: boolean;
   onShowToast: (msg: string) => void;
   checkAdminPermission: () => boolean;
+  stampa?: boolean; // apre direttamente la sottoscheda di stampa (PDF della Tabella informazioni)
 }
 
 const MESI = [
@@ -231,13 +232,14 @@ export function ServizioCampoView({
   onSaveState,
   isAdmin,
   onShowToast,
-  checkAdminPermission
+  checkAdminPermission,
+  stampa
 }: ServizioCampoViewProps) {
   const now = new Date();
   const [selectedMonth, setSelectedMonth] = useState<number>(now.getMonth());
   const [selectedYear, setSelectedYear] = useState<number>(now.getFullYear());
   const [generationWarnings, setGenerationWarnings] = useState<string[]>([]);
-  const [activeSubTab, setActiveSubTab] = useState<'programma' | 'conduttori' | 'luoghi' | 'statistiche' | 'stampa'>('programma');
+  const [activeSubTab, setActiveSubTab] = useState<'programma' | 'conduttori' | 'luoghi' | 'statistiche' | 'stampa'>(stampa ? 'stampa' : 'programma');
 
   // Modal / Form for adding a Special Date (Festivo / Unificata / etc.)
   const [isSpecialModalOpen, setIsSpecialModalOpen] = useState(false);

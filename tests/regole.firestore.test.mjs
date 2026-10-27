@@ -92,3 +92,34 @@ test('consultazione e in attesa non vedono l\'elenco utenti', async () => {
   await assertFails(getDocs(collection(come('attesa', 'attesa@test.it'), 'utenti')));
   await assertFails(updateDoc(doc(come('lettore', 'lettore@test.it'), 'utenti/attesa'), { ruolo: 'viewer' }));
 });
+
+test('permessi per programma: si modifica solo il programma concesso', async () => {
+  await env.withSecurityRulesDisabled(ctx =>
+    setDoc(doc(ctx.firestore(), 'utenti/vm'), { email: 'vm@test.it', nome: 'VM', ruolo: 'viewer', creato: 'x', permessi: { vitaEMinistero: 'modifica', domenica: 'modifica', mensile: 'vede' } }));
+  const db = come('vm', 'vm@test.it');
+  await assertSucceeds(setDoc(dati(db), { state: { vitaEMinistero: { meetings: [1] } }, updatedAt: 'x' }, { merge: true }));
+  await assertSucceeds(setDoc(dati(db), { activePrograms: { domRows: [], domMonth: 3 } }, { merge: true }));
+  await assertFails(setDoc(dati(db), { state: { people: [1] } }, { merge: true }));          // anagrafica: solo admin
+  await assertFails(setDoc(dati(db), { state: { territori: { assegnazioni: [] } } }, { merge: true })); // nascosto
+  await assertFails(setDoc(dati(db), { activePrograms: { menRows: [] } }, { merge: true })); // mensile: solo consultazione
+  await assertFails(setDoc(dati(db), { altro: 1 }, { merge: true }));
+  await assertFails(setDoc(dati(db), { activePrograms: { junk: 1 } }, { merge: true }));
+  await assertFails(setDoc(dati(come('lettore', 'lettore@test.it')), { state: { vitaEMinistero: {} } }, { merge: true })); // senza permessi
+  const admin = come('admin1', 'admin@test.it');
+  await assertSucceeds(updateDoc(doc(admin, 'utenti/lettore'), { permessi: { territori: 'modifica' } }));
+  await assertFails(updateDoc(doc(admin, 'utenti/lettore'), { permessi: 'tutto' }));
+  await assertFails(updateDoc(doc(db, 'utenti/vm'), { permessi: { mensile: 'modifica' } })); // non si dà permessi da solo
+});
+
+test('allegati: li legge chi è approvato, li carica e cancella solo l\'admin, solo PDF', async () => {
+  const pdf = { nome: 'a.pdf', dati: 'data:application/pdf;base64,JVBERi0=', caricato: 'x' };
+  const admin = come('admin1', 'admin@test.it');
+  await assertSucceeds(setDoc(doc(admin, 'allegati/a1'), pdf));
+  await assertFails(setDoc(doc(admin, 'allegati/a2'), { ...pdf, dati: 'data:text/html;base64,PGI+' }));
+  await assertFails(setDoc(doc(admin, 'allegati/a3'), { ...pdf, extra: 1 }));
+  await assertSucceeds(getDoc(doc(come('lettore', 'lettore@test.it'), 'allegati/a1')));
+  await assertFails(getDoc(doc(come('attesa', 'attesa@test.it'), 'allegati/a1')));
+  await assertFails(setDoc(doc(come('lettore', 'lettore@test.it'), 'allegati/a4'), pdf));
+  await assertFails(deleteDoc(doc(come('lettore', 'lettore@test.it'), 'allegati/a1')));
+  await assertSucceeds(deleteDoc(doc(admin, 'allegati/a1')));
+});
