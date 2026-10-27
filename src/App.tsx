@@ -283,8 +283,8 @@ export default function App({ utente, onEsci }: { utente: AuthUser; onEsci: () =
     const month = overrides.domMonth ?? domMonth;
     const key = domenicaPeriodKey(year, month);
     // Include locally migrated periods that do not yet have a cloud entry.
-    let updates = {
-      ...Object.fromEntries(Object.entries(domProgramsRef.current).filter(([period]) => !domCloudKeys.current.has(period))),
+    let updates: Record<string, DomenicaMonthProgram> = {
+      ...(Object.fromEntries(Object.entries(domProgramsRef.current).filter(([period]) => !domCloudKeys.current.has(period))) as Record<string, DomenicaMonthProgram>),
       ...(overrides.domPrograms || {}),
     };
     if ('domRows' in overrides || 'domTitle' in overrides || 'domWarn' in overrides) {
@@ -299,8 +299,8 @@ export default function App({ utente, onEsci }: { utente: AuthUser; onEsci: () =
     const menY = overrides.menYear ?? menYear;
     const menM = overrides.menMonth ?? menMonth;
     const menKey = domenicaPeriodKey(menY, menM);
-    let menUpdates = {
-      ...Object.fromEntries(Object.entries(menProgramsRef.current).filter(([period]) => !menCloudKeys.current.has(period))),
+    let menUpdates: Record<string, MensileMonthProgram> = {
+      ...(Object.fromEntries(Object.entries(menProgramsRef.current).filter(([period]) => !menCloudKeys.current.has(period))) as Record<string, MensileMonthProgram>),
       ...(overrides.menPrograms || {}),
     };
     if ('menRows' in overrides || 'menTitle' in overrides || 'menWarn' in overrides) {
@@ -723,7 +723,7 @@ export default function App({ utente, onEsci }: { utente: AuthUser; onEsci: () =
   const menRows = menProgram?.rows ?? null;
   const menWarn = menProgram?.warn ?? null;
   const menTitle = menProgram?.title || `Mese di ${MESI[menMonth]} ${menYear}`;
-  const allMensileRows = Object.values(menPrograms).flatMap(program => program.rows || []);
+  const allMensileRows = (Object.values(menPrograms) as MensileMonthProgram[]).flatMap(program => program.rows || []);
 
   const generateMensile = (y: number, m: number) => {
     if (!checkAdminPermission()) return;
@@ -1259,7 +1259,7 @@ try {
   const domTitle = domProgram?.title || `${MESI[domMonth]} ${domYear}`;
   const domenicaProgramRows = weekendDisplayRows(domRows, domTitle);
 
-  const allDomenicaRows = Object.values(domPrograms).flatMap(program => program.rows || []);
+  const allDomenicaRows = (Object.values(domPrograms) as DomenicaMonthProgram[]).flatMap(program => program.rows || []);
   // Stesso nominativo in più ruoli nella stessa settimana, su tutti i programmi.
   const conflittiRuoli = activeTab in PROGRAMMI ? weeklyRoleConflicts(state, { mensileRows: allMensileRows, domenicaRows: allDomenicaRows }) : [];
 
