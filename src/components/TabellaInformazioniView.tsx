@@ -85,9 +85,9 @@ export const TabellaInformazioniView: React.FC<TabellaInformazioniViewProps> = (
 
   const oggi = new Date();
   const meseInCorso = mese.y === oggi.getFullYear() && mese.m === oggi.getMonth();
-  // shortcut: da 12 mesi fa a 3 mesi avanti (new Date normalizza il cambio d'anno); allargare se servono mesi più lontani.
-  const mesiSelezionabili = Array.from({ length: 16 }, (_, i) => {
-    const d = new Date(oggi.getFullYear(), oggi.getMonth() - 12 + i, 1);
+  // Da settembre 2026 (primo mese con i programmi) a 3 mesi dopo quello in corso; new Date normalizza il cambio d'anno.
+  const mesiSelezionabili = Array.from({ length: (oggi.getFullYear() - 2026) * 12 + oggi.getMonth() - 8 + 4 }, (_, i) => {
+    const d = new Date(2026, 8 + i, 1);
     return { y: d.getFullYear(), m: d.getMonth() };
   });
 
