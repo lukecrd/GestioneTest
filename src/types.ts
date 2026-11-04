@@ -53,8 +53,8 @@ export interface ArchivedProgram {
 }
 
 export interface OperaPubblicaShiftAvailability {
-  turno1: boolean; // 8:00 - 10:00
-  turno2: boolean; // 10:00 - 12:00
+  turno1: boolean; // orario in OperaPubblicaData.orari (default 8:00 - 10:00)
+  turno2: boolean; // orario in OperaPubblicaData.orari (default 10:00 - 12:00)
 }
 
 export interface OperaPubblicaParticipant {
@@ -110,6 +110,11 @@ export interface OperaPubblicaData {
   defaultShifts?: {
     ribollaMartedi: { turno1: boolean; turno2: boolean };
     roccastradaMercoledi: { turno1: boolean; turno2: boolean };
+  };
+  // Orari dei turni per luogo (es. "8:00 - 10:00"); se assenti valgono 8-10 / 10-12
+  orari?: {
+    ribollaMartedi: { turno1: string; turno2: string };
+    roccastradaMercoledi: { turno1: string; turno2: string };
   };
   survey?: OperaPubblicaSurvey | null;
 }
