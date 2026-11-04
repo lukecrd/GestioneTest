@@ -15,7 +15,9 @@ interface TabellaInformazioniViewProps {
   isAdmin: boolean;
   onSalvaAllegato: (chiave: string, allegato: TabellaAllegato | null) => void;
   onErrore: (messaggio: string) => void;
-  onApriPdf: (sezione: SectionKey, titolo: string) => Promise<void>; // PDF del programma del mese in corso
+  onApriPdf: (sezione: SectionKey, titolo: string) => Promise<void>; // PDF del programma del mese scelto
+  mese: { y: number; m: number }; // mese dei programmi (m: 0-11)
+  onCambiaMese?: (mese: { y: number; m: number }) => void; // assente: selettore nascosto (PDF della tabella)
   onSalvaDrive?: () => Promise<void>; // assente: pulsante nascosto (non amministratori, PDF della tabella)
 }
 
@@ -70,13 +72,24 @@ export const ZOOM = {
   codice: '111222',
 };
 
+// Nome del mese per il selettore e il titolo, es. "novembre 2026".
+const nomeMese = (y: number, m: number) => new Date(y, m, 1).toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+
 const titoloGruppo = 'font-bold italic text-[#7b3fb5] dark:text-violet-300 text-lg sm:text-xl text-center';
 
-export const TabellaInformazioniView: React.FC<TabellaInformazioniViewProps> = ({ onSelectSection, visibile, allegati, isAdmin, onSalvaAllegato, onErrore, onApriPdf, onSalvaDrive }) => {
+export const TabellaInformazioniView: React.FC<TabellaInformazioniViewProps> = ({ onSelectSection, visibile, allegati, isAdmin, onSalvaAllegato, onErrore, onApriPdf, mese, onCambiaMese, onSalvaDrive }) => {
   const [inCaricamento, setInCaricamento] = useState<string | null>(null);
   const [salvataggioDrive, setSalvataggioDrive] = useState(false);
 
   useEffect(() => { if (onSalvaDrive) precaricaDrive().catch(() => {}); }, [!!onSalvaDrive]);
+
+  const oggi = new Date();
+  const meseInCorso = mese.y === oggi.getFullYear() && mese.m === oggi.getMonth();
+  // shortcut: da 12 mesi fa a 3 mesi avanti (new Date normalizza il cambio d'anno); allargare se servono mesi più lontani.
+  const mesiSelezionabili = Array.from({ length: 16 }, (_, i) => {
+    const d = new Date(oggi.getFullYear(), oggi.getMonth() - 12 + i, 1);
+    return { y: d.getFullYear(), m: d.getMonth() };
+  });
 
   const salvaDrive = () => {
     if (!onSalvaDrive) return;
@@ -201,7 +214,16 @@ export const TabellaInformazioniView: React.FC<TabellaInformazioniViewProps> = (
       <div className="grid grid-cols-1 lg:grid-cols-2 lg:divide-x divide-slate-800 dark:divide-slate-500">
         {/* Colonna sinistra: programmi del mese */}
         <div className="lg:pr-6">
-          <h2 className={titoloGruppo}>Programmi mese in corso:</h2>
+          <h2 className={titoloGruppo}>Programmi {meseInCorso ? 'mese in corso' : `di ${nomeMese(mese.y, mese.m)}`}:</h2>
+          {onCambiaMese && (
+            <div className="flex justify-center mt-2 no-print">
+              <label className="sr-only" htmlFor="tabella-mese">Mese dei programmi</label>
+              <select id="tabella-mese" className="inp !w-auto" value={`${mese.y}-${mese.m}`}
+                onChange={e => { const [y, m] = e.target.value.split('-').map(Number); onCambiaMese({ y, m }); }}>
+                {mesiSelezionabili.map(({ y, m }) => <option key={`${y}-${m}`} value={`${y}-${m}`}>{nomeMese(y, m)}</option>)}
+              </select>
+            </div>
+          )}
           <div className="divide-y divide-slate-800 dark:divide-slate-500">
             {PROGRAMMI_MESE.filter(v => !v.sezione || visibile(v.sezione)).map(v => (
               <div key={v.img} className="py-3"><Riquadro voce={v} grande /></div>

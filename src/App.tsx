@@ -694,6 +694,8 @@ export default function App({ utente, onEsci }: { utente: AuthUser; onEsci: () =
 
   // --- PROGRAMMA MENSILE STATE ---
   const now = new Date();
+  // Mese dei programmi della Tabella informazioni (riquadri, PDF e salvataggio su Drive): di default il mese in corso.
+  const [meseTabella, setMeseTabella] = useState(() => ({ y: now.getFullYear(), m: now.getMonth() }));
   const initialMenSelection = readProgramSelection(storage.get(MENSILE_PROGRAMS_KEY + '_selection'), now);
   const [menMonth, setMenMonth] = useState(initialMenSelection.month);
   const [menYear, setMenYear] = useState(initialMenSelection.year);
@@ -1265,14 +1267,13 @@ try {
   // Stesso nominativo in più ruoli nella stessa settimana, su tutti i programmi.
   const conflittiRuoli = activeTab in PROGRAMMI ? weeklyRoleConflicts(state, { mensileRows: allMensileRows, domenicaRows: allDomenicaRows }) : [];
 
-  // --- PDF DEI PROGRAMMI (Tabella informazioni): programma del mese in corso, generato al clic ---
+  // --- PDF DEI PROGRAMMI (Tabella informazioni): programma del mese scelto, generato al clic ---
   const foglioPdf = (sezione: SectionKey): React.ReactElement | null => {
-    const y = now.getFullYear();
-    const m = now.getMonth();
+    const { y, m } = meseTabella;
     const delMese = (dateStr?: string) => !!dateStr && dateStr.startsWith(`${y}-${String(m + 1).padStart(2, '0')}`);
     const testo = (value?: string) => (value && value !== '—' ? value : '');
     // Solo lettura: la vista disegnata per il PDF non deve mai salvare.
-    const vista = { activePrograms: { mensileRows: allMensileRows, domenicaRows: allDomenicaRows }, onSaveState: () => {}, isAdmin: false, onShowToast: () => {}, checkAdminPermission: () => false, stampa: true };
+    const vista = { activePrograms: { mensileRows: allMensileRows, domenicaRows: allDomenicaRows }, onSaveState: () => {}, isAdmin: false, onShowToast: () => {}, checkAdminPermission: () => false, stampa: true, meseStampa: meseTabella };
     switch (sezione) {
       case 'mensile': {
         const programma = menPrograms[domenicaPeriodKey(y, m)];
@@ -1306,7 +1307,7 @@ try {
   const salvaTabellaSuDrive = async () => {
     try {
       const token = await accediDrive(); // prima di tutto: il popup di Google deve partire dal clic
-      const mese = `${MESI[now.getMonth()]} ${now.getFullYear()}`;
+      const mese = `${MESI[meseTabella.m]} ${meseTabella.y}`;
       const nome = `Tabella Informazioni - ${mese}.pdf`;
       const link: Record<string, string> = { zoom: ZOOM.url };
       const perSezione: Partial<Record<SectionKey, string>> = {}; // incarichi settimanali e pulizie: stesso PDF mensile
@@ -1331,7 +1332,7 @@ try {
       }
       const tabella = (
         <TabellaInformazioniView onSelectSection={() => {}} visibile={sez => puoVedere(currentUser, sez)} allegati={state.tabellaAllegati || {}}
-          isAdmin={false} onSalvaAllegato={() => {}} onErrore={() => {}} onApriPdf={() => Promise.resolve()} />
+          isAdmin={false} onSalvaAllegato={() => {}} onErrore={() => {}} onApriPdf={() => Promise.resolve()} mese={meseTabella} />
       );
       const pdf = await creaPdf(tabella, nome, { stampa: false, larghezzaPx: 1000, finestraPx: 1280, unaPagina: true, link });
       await caricaSuDrive(token, pdf, nome);
@@ -1344,11 +1345,12 @@ try {
 
   const apriPdfSezione = (sezione: SectionKey, titolo: string) => {
     const foglio = foglioPdf(sezione);
+    const mese = `${MESI[meseTabella.m]} ${meseTabella.y}`;
     if (!foglio) {
-      showToast(`Il programma "${titolo}" di ${MESI[now.getMonth()]} ${now.getFullYear()} non è ancora pronto`);
+      showToast(`Il programma "${titolo}" di ${mese} non è ancora pronto`);
       return Promise.resolve();
     }
-    return apriPdfProgramma(foglio, `${titolo} - ${MESI[now.getMonth()]} ${now.getFullYear()}`)
+    return apriPdfProgramma(foglio, `${titolo} - ${mese}`)
       .catch(err => { console.error(err); showToast('Non è stato possibile creare il PDF'); });
   };
 
@@ -1793,6 +1795,8 @@ try {
           onSalvaAllegato={salvaAllegatoTabella}
           onErrore={showToast}
           onApriPdf={apriPdfSezione}
+          mese={meseTabella}
+          onCambiaMese={setMeseTabella}
           onSalvaDrive={currentUser.role === 'admin' ? salvaTabellaSuDrive : undefined}
         />
       )}
