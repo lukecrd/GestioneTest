@@ -63,6 +63,7 @@ interface ServizioCampoViewProps {
   onShowToast: (msg: string) => void;
   checkAdminPermission: () => boolean;
   stampa?: boolean; // apre direttamente la sottoscheda di stampa (PDF della Tabella informazioni)
+  meseStampa?: { y: number; m: number }; // mese mostrato all'apertura (mese scelto nella Tabella informazioni)
 }
 
 const MESI = [
@@ -233,11 +234,12 @@ export function ServizioCampoView({
   isAdmin,
   onShowToast,
   checkAdminPermission,
-  stampa
+  stampa,
+  meseStampa
 }: ServizioCampoViewProps) {
   const now = new Date();
-  const [selectedMonth, setSelectedMonth] = useState<number>(now.getMonth());
-  const [selectedYear, setSelectedYear] = useState<number>(now.getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState<number>(meseStampa?.m ?? now.getMonth());
+  const [selectedYear, setSelectedYear] = useState<number>(meseStampa?.y ?? now.getFullYear());
   const [generationWarnings, setGenerationWarnings] = useState<string[]>([]);
   const [activeSubTab, setActiveSubTab] = useState<'programma' | 'conduttori' | 'luoghi' | 'statistiche' | 'stampa'>(stampa ? 'stampa' : 'programma');
 

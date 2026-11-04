@@ -61,6 +61,7 @@ interface OperaPubblicaViewProps {
   onShowToast: (msg: string) => void;
   checkAdminPermission: () => boolean;
   stampa?: boolean; // apre direttamente la sottoscheda di stampa (PDF della Tabella informazioni)
+  meseStampa?: { y: number; m: number }; // mese mostrato all'apertura (mese scelto nella Tabella informazioni)
 }
 
 const MESI = [
@@ -114,14 +115,15 @@ export const OperaPubblicaView: React.FC<OperaPubblicaViewProps> = ({
   onShowToast,
   checkAdminPermission,
   stampa,
+  meseStampa,
 }) => {
   const [generationWarnings, setGenerationWarnings] = useState<string[]>([]);
   const [activeSubTab, setActiveSubTab] = useState<'partecipanti' | 'programma' | 'sondaggio' | 'statistiche' | 'stampa'>(stampa ? 'stampa' : 'programma');
 
   // Month & Year state for schedule
   const now = new Date();
-  const [selectedMonth, setSelectedMonth] = useState<number>(now.getMonth());
-  const [selectedYear, setSelectedYear] = useState<number>(now.getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState<number>(meseStampa?.m ?? now.getMonth());
+  const [selectedYear, setSelectedYear] = useState<number>(meseStampa?.y ?? now.getFullYear());
 
   // Form states for adding participant
   const [newParticipantName, setNewParticipantName] = useState('');
