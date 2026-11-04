@@ -68,6 +68,12 @@ const MESI = [
   'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'
 ];
 
+type LocKey = 'ribollaMartedi' | 'roccastradaMercoledi';
+const ORARI_DEFAULT = { turno1: '8:00 - 10:00', turno2: '10:00 - 12:00' };
+// Formato del modello Excel: "08,00 - 10,00"
+const locOf = (dayOfWeek: 'martedi' | 'mercoledi'): LocKey => dayOfWeek === 'martedi' ? 'ribollaMartedi' : 'roccastradaMercoledi';
+const orarioExcel = (o: string) => o.replace(/\b(\d)(?=[:.])/g, '0$1').replace(/[:.]/g, ',');
+
 function getTuesdaysAndWednesdays(year: number, month: number) {
   const dates: { dateStr: string; dayOfWeek: 'martedi' | 'mercoledi'; location: 'Mercato di Ribolla' | 'Mercato di Roccastrada'; date: Date }[] = [];
   const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -203,6 +209,45 @@ export const OperaPubblicaView: React.FC<OperaPubblicaViewProps> = ({
       operaPubblica: newData,
     });
   };
+
+  // --- ORARI DEI TURNI (configurabili per luogo) ---
+  const orario = (loc: LocKey, turno: 'turno1' | 'turno2') => operaData.orari?.[loc]?.[turno] || ORARI_DEFAULT[turno];
+
+  const handleSetOrario = (loc: LocKey, turno: 'turno1' | 'turno2', value: string) => {
+    const v = value.trim();
+    if (v === orario(loc, turno)) return;
+    if (!checkAdminPermission()) return;
+    const orari = {
+      ribollaMartedi: { ...ORARI_DEFAULT, ...operaData.orari?.ribollaMartedi },
+      roccastradaMercoledi: { ...ORARI_DEFAULT, ...operaData.orari?.roccastradaMercoledi },
+    };
+    orari[loc] = { ...orari[loc], [turno]: v || ORARI_DEFAULT[turno] };
+    updateOperaData({ ...operaData, orari });
+    onShowToast('Orario del turno aggiornato.');
+  };
+
+  const renderOrari = (loc: LocKey) => isAdmin ? (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-600 dark:text-slate-400 mt-1">
+      {(['turno1', 'turno2'] as const).map((t, i) => (
+        // key con il valore: se l'orario cambia da un altro dispositivo il campo si riallinea
+        <label key={t + orario(loc, t)} className="flex items-center gap-1">
+          Turno {i + 1}:
+          <input
+            type="text"
+            defaultValue={orario(loc, t)}
+            placeholder={ORARI_DEFAULT[t]}
+            onBlur={e => handleSetOrario(loc, t, e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+            className="inp w-28 text-xs py-0.5 px-1.5 font-bold"
+          />
+        </label>
+      ))}
+    </div>
+  ) : (
+    <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+      Turno 1: <strong>{orario(loc, 'turno1')}</strong> | Turno 2: <strong>{orario(loc, 'turno2')}</strong>
+    </p>
+  );
 
   // --- PARTECPANTI MANAGEMENT ---
   const handleAddParticipant = (e: React.FormEvent) => {
@@ -910,7 +955,8 @@ export const OperaPubblicaView: React.FC<OperaPubblicaViewProps> = ({
       const t1Text = t1Active ? (t1Names || '---') : '(Turno non previsto)';
       const t2Text = t2Active ? (t2Names || '---') : '(Turno non previsto)';
 
-      return `📍 *${item.location}* (${formatDateLabel(item.dateStr)})\n  ⏰ 8:00 - 10:00: ${t1Text}\n  ⏰ 10:00 - 12:00: ${t2Text}\n`;
+      const loc = locOf(item.dayOfWeek);
+      return `📍 *${item.location}* (${formatDateLabel(item.dateStr)})\n  ⏰ ${orario(loc, 'turno1')}: ${t1Text}\n  ⏰ ${orario(loc, 'turno2')}: ${t2Text}\n`;
     });
 
     return `🛒 *PROGRAMMA OPERA CON ESPOSITORI MOBILI*\n📅 *Mese di ${MESI[selectedMonth]} ${selectedYear}*\n\n${monthAssignments.join('\n')}`;
@@ -959,20 +1005,21 @@ try {
           .join(' - ');
 
         const dateShort = formatShortDate(item.dateStr);
+        const loc = locOf(item.dayOfWeek);
 
-        // Row 1 (Turno 1: 08,00 - 10,00)
+        // Row 1 (Turno 1)
         rows.push([
           dateShort,
           item.location,
-          '08,00 - 10,00',
+          orarioExcel(orario(loc, 'turno1')),
           t1Active ? (t1Names || '') : '',
         ]);
 
-        // Row 2 (Turno 2: 10,00 - 12,00)
+        // Row 2 (Turno 2)
         rows.push([
           dateShort,
           item.location,
-          '10,00 - 12,00',
+          orarioExcel(orario(loc, 'turno2')),
           t2Active ? (t2Names || '') : '',
         ]);
 
@@ -987,15 +1034,15 @@ try {
 
     // Extra template rows matching the PDF exactly:
     // 1) Ribolla placeholder
-    rows.push(['', 'Mercato di Ribolla', '08,00 - 10,00', '']);
-    rows.push(['', 'Mercato di Ribolla', '10,00 - 12,00', '']);
+    rows.push(['', 'Mercato di Ribolla', orarioExcel(orario('ribollaMartedi', 'turno1')), '']);
+    rows.push(['', 'Mercato di Ribolla', orarioExcel(orario('ribollaMartedi', 'turno2')), '']);
     merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow + 1, c: 0 } });
     merges.push({ s: { r: currentRow, c: 1 }, e: { r: currentRow + 1, c: 1 } });
     currentRow += 2;
 
     // 2) Roccastrada placeholder
-    rows.push(['', 'Mercato di Roccastrada', '08,00 - 10,00', '']);
-    rows.push(['', 'Mercato di Roccastrada', '10,00 - 12,00', '']);
+    rows.push(['', 'Mercato di Roccastrada', orarioExcel(orario('roccastradaMercoledi', 'turno1')), '']);
+    rows.push(['', 'Mercato di Roccastrada', orarioExcel(orario('roccastradaMercoledi', 'turno2')), '']);
     merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow + 1, c: 0 } });
     merges.push({ s: { r: currentRow, c: 1 }, e: { r: currentRow + 1, c: 1 } });
     currentRow += 2;
@@ -1065,7 +1112,7 @@ try {
               dateStr: s.dateStr,
               dayLabel: formatShortDate(s.dateStr),
               location: isRibolla ? 'Ribolla' : 'Roccastrada',
-              shiftTime: '08:00 - 10:00',
+              shiftTime: orario(isRibolla ? 'ribollaMartedi' : 'roccastradaMercoledi', 'turno1'),
             });
           }
         }
@@ -1081,7 +1128,7 @@ try {
               dateStr: s.dateStr,
               dayLabel: formatShortDate(s.dateStr),
               location: isRibolla ? 'Ribolla' : 'Roccastrada',
-              shiftTime: '10:00 - 12:00',
+              shiftTime: orario(isRibolla ? 'ribollaMartedi' : 'roccastradaMercoledi', 'turno2'),
             });
           }
         }
@@ -1125,7 +1172,7 @@ try {
         },
       };
     });
-  }, [participants, schedule, selectedYear, selectedMonth, state.people]);
+  }, [participants, schedule, selectedYear, selectedMonth, state.people, operaData.orari]);
 
   // Aggregate stats calculations
   const totalParticipants = participants.length;
@@ -1212,11 +1259,11 @@ try {
       'Nome e Cognome',
       'Genere',
       `Turni ${MESI[selectedMonth]} ${selectedYear}`,
-      'Ribolla 08-10',
-      'Ribolla 10-12',
+      `Ribolla ${orario('ribollaMartedi', 'turno1')}`,
+      `Ribolla ${orario('ribollaMartedi', 'turno2')}`,
       'Tot. Ribolla',
-      'Roccastrada 08-10',
-      'Roccastrada 10-12',
+      `Roccastrada ${orario('roccastradaMercoledi', 'turno1')}`,
+      `Roccastrada ${orario('roccastradaMercoledi', 'turno2')}`,
       'Tot. Roccastrada',
       'Date Assegnate nel Mese',
       'Totale Storico Complessivo',
@@ -1227,10 +1274,10 @@ try {
     const rows = participantUsageStats.map(p => {
       const datesStr = p.monthAssignments.map(a => `${a.dayLabel} (${a.location} ${a.shiftTime})`).join(', ') || 'Nessuna data';
       const availStr = [
-        p.availability.ribollaT1 ? 'Ribolla 8-10' : '',
-        p.availability.ribollaT2 ? 'Ribolla 10-12' : '',
-        p.availability.roccastradaT1 ? 'Roccastrada 8-10' : '',
-        p.availability.roccastradaT2 ? 'Roccastrada 10-12' : '',
+        p.availability.ribollaT1 ? `Ribolla ${orario('ribollaMartedi', 'turno1')}` : '',
+        p.availability.ribollaT2 ? `Ribolla ${orario('ribollaMartedi', 'turno2')}` : '',
+        p.availability.roccastradaT1 ? `Roccastrada ${orario('roccastradaMercoledi', 'turno1')}` : '',
+        p.availability.roccastradaT2 ? `Roccastrada ${orario('roccastradaMercoledi', 'turno2')}` : '',
       ].filter(Boolean).join('; ') || 'Nessuna';
 
       return [
@@ -1582,9 +1629,7 @@ try {
                 <h3 className="font-bold text-sm text-indigo-950 dark:text-indigo-200">
                   Martedì - Mercato di Ribolla
                 </h3>
-                <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
-                  Turno 1: <strong>8:00 - 10:00</strong> | Turno 2: <strong>10:00 - 12:00</strong>
-                </p>
+                {renderOrari('ribollaMartedi')}
                 <div className="mt-2 text-[11px] text-indigo-700 dark:text-indigo-300 font-medium">
                   {participants.filter(p => p.availability.ribollaMartedi.turno1 || p.availability.ribollaMartedi.turno2).length} proclamatori disponibili
                 </div>
@@ -1599,9 +1644,7 @@ try {
                 <h3 className="font-bold text-sm text-emerald-950 dark:text-emerald-200">
                   Mercoledì - Mercato di Roccastrada
                 </h3>
-                <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
-                  Turno 1: <strong>8:00 - 10:00</strong> | Turno 2: <strong>10:00 - 12:00</strong>
-                </p>
+                {renderOrari('roccastradaMercoledi')}
                 <div className="mt-2 text-[11px] text-emerald-700 dark:text-emerald-300 font-medium">
                   {participants.filter(p => p.availability.roccastradaMercoledi.turno1 || p.availability.roccastradaMercoledi.turno2).length} proclamatori disponibili
                 </div>
@@ -1667,31 +1710,31 @@ try {
                                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                             }`}
                           >
-                            Entrambi (8-12)
+                            Entrambi
                           </button>
                           <button
                             type="button"
                             onClick={() => handleSetDateShiftMode(item.dateStr, 't1_only')}
-                            title="Attiva solo il Turno 1 (8:00 - 10:00)"
+                            title={`Attiva solo il Turno 1 (${orario(locKey, 'turno1')})`}
                             className={`px-2 py-0.5 rounded-lg font-medium transition-all ${
                               t1Active && !t2Active
                                 ? 'bg-indigo-600 text-white shadow-sm'
                                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                             }`}
                           >
-                            Solo 8-10
+                            Solo Turno 1
                           </button>
                           <button
                             type="button"
                             onClick={() => handleSetDateShiftMode(item.dateStr, 't2_only')}
-                            title="Attiva solo il Turno 2 (10:00 - 12:00)"
+                            title={`Attiva solo il Turno 2 (${orario(locKey, 'turno2')})`}
                             className={`px-2 py-0.5 rounded-lg font-medium transition-all ${
                               !t1Active && t2Active
                                 ? 'bg-indigo-600 text-white shadow-sm'
                                 : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                             }`}
                           >
-                            Solo 10-12
+                            Solo Turno 2
                           </button>
                           <button
                             type="button"
@@ -1710,7 +1753,7 @@ try {
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                      {/* Turno 1: 8:00 - 10:00 */}
+                      {/* Turno 1 */}
                       <div
                         className={`p-3.5 rounded-xl border transition-all ${
                           t1Active
@@ -1721,7 +1764,7 @@ try {
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 dark:text-slate-200">
                             <Clock className={`w-3.5 h-3.5 ${t1Active ? 'text-indigo-500' : 'text-slate-400'}`} />
-                            <span>Turno 1: 8:00 - 10:00</span>
+                            <span>Turno 1: {orario(locKey, 'turno1')}</span>
                           </div>
                           {t1Active ? (
                             <div className="flex items-center gap-1.5">
@@ -1780,7 +1823,7 @@ try {
                             {isAdmin && (
                               <div className="pt-2 border-t border-slate-200 dark:border-slate-700/80 space-y-2">
                                 <label className="block text-[10px] text-slate-500 font-bold">
-                                  Proclamatori disponibili (8-10):
+                                  Proclamatori disponibili ({orario(locKey, 'turno1')}):
                                 </label>
                                 <div className="flex flex-wrap gap-1 max-h-28 overflow-y-auto pr-1">
                                   {availT1Participants.map(p => {
@@ -1813,7 +1856,7 @@ try {
                                   })}
                                   {availT1Participants.length === 0 && (
                                     <span className="text-[11px] text-amber-600 dark:text-amber-400">
-                                      Nessun proclamatore con disponibilità dichiarata 8-10.
+                                      Nessun proclamatore con disponibilità dichiarata {orario(locKey, 'turno1')}.
                                     </span>
                                   )}
                                 </div>
@@ -1854,7 +1897,7 @@ try {
                         )}
                       </div>
 
-                      {/* Turno 2: 10:00 - 12:00 */}
+                      {/* Turno 2 */}
                       <div
                         className={`p-3.5 rounded-xl border transition-all ${
                           t2Active
@@ -1865,7 +1908,7 @@ try {
                         <div className="flex items-center justify-between mb-2">
                           <div className="flex items-center gap-1.5 text-xs font-bold text-slate-800 dark:text-slate-200">
                             <Clock className={`w-3.5 h-3.5 ${t2Active ? 'text-emerald-500' : 'text-slate-400'}`} />
-                            <span>Turno 2: 10:00 - 12:00</span>
+                            <span>Turno 2: {orario(locKey, 'turno2')}</span>
                           </div>
                           {t2Active ? (
                             <div className="flex items-center gap-1.5">
@@ -1924,7 +1967,7 @@ try {
                             {isAdmin && (
                               <div className="pt-2 border-t border-slate-200 dark:border-slate-700/80 space-y-2">
                                 <label className="block text-[10px] text-slate-500 font-bold">
-                                  Proclamatori disponibili (10-12):
+                                  Proclamatori disponibili ({orario(locKey, 'turno2')}):
                                 </label>
                                 <div className="flex flex-wrap gap-1 max-h-28 overflow-y-auto pr-1">
                                   {availT2Participants.map(p => {
@@ -1957,7 +2000,7 @@ try {
                                   })}
                                   {availT2Participants.length === 0 && (
                                     <span className="text-[11px] text-amber-600 dark:text-amber-400">
-                                      Nessun proclamatore con disponibilità dichiarata 10-12.
+                                      Nessun proclamatore con disponibilità dichiarata {orario(locKey, 'turno2')}.
                                     </span>
                                   )}
                                 </div>
@@ -2106,10 +2149,10 @@ try {
                         <thead>
                           <tr className="text-left text-slate-500 dark:text-slate-400 border-b border-slate-200 dark:border-slate-800">
                             <th className="p-2 font-semibold">Nominativo</th>
-                            <th className="p-2 font-semibold text-center">Ribolla Mar. 8-10</th>
-                            <th className="p-2 font-semibold text-center">Ribolla Mar. 10-12</th>
-                            <th className="p-2 font-semibold text-center">Roccastrada Mer. 8-10</th>
-                            <th className="p-2 font-semibold text-center">Roccastrada Mer. 10-12</th>
+                            <th className="p-2 font-semibold text-center">Ribolla Mar. {orario('ribollaMartedi', 'turno1')}</th>
+                            <th className="p-2 font-semibold text-center">Ribolla Mar. {orario('ribollaMartedi', 'turno2')}</th>
+                            <th className="p-2 font-semibold text-center">Roccastrada Mer. {orario('roccastradaMercoledi', 'turno1')}</th>
+                            <th className="p-2 font-semibold text-center">Roccastrada Mer. {orario('roccastradaMercoledi', 'turno2')}</th>
                             <th className="p-2 font-semibold">Note</th>
                             <th className="p-2 font-semibold text-center">Stato</th>
                             <th className="p-2 font-semibold text-right">Azioni</th>
@@ -2249,7 +2292,7 @@ try {
                           }))
                         }
                       />
-                      <span>8:00 - 10:00</span>
+                      <span>{orario('ribollaMartedi', 'turno1')}</span>
                     </label>
                     <label className="flex items-center gap-2 text-xs cursor-pointer">
                       <input
@@ -2262,7 +2305,7 @@ try {
                           }))
                         }
                       />
-                      <span>10:00 - 12:00</span>
+                      <span>{orario('ribollaMartedi', 'turno2')}</span>
                     </label>
                   </div>
 
@@ -2281,7 +2324,7 @@ try {
                           }))
                         }
                       />
-                      <span>8:00 - 10:00</span>
+                      <span>{orario('roccastradaMercoledi', 'turno1')}</span>
                     </label>
                     <label className="flex items-center gap-2 text-xs cursor-pointer">
                       <input
@@ -2294,7 +2337,7 @@ try {
                           }))
                         }
                       />
-                      <span>10:00 - 12:00</span>
+                      <span>{orario('roccastradaMercoledi', 'turno2')}</span>
                     </label>
                   </div>
                 </div>
@@ -2489,7 +2532,7 @@ try {
                                   className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4"
                                 />
                                 <span className={`text-[11px] font-medium ${rib.turno1 ? 'text-indigo-700 dark:text-indigo-300 font-bold' : 'text-slate-400'}`}>
-                                  8:00 - 10:00
+                                  {orario('ribollaMartedi', 'turno1')}
                                 </span>
                               </label>
 
@@ -2502,7 +2545,7 @@ try {
                                   className="rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4"
                                 />
                                 <span className={`text-[11px] font-medium ${rib.turno2 ? 'text-indigo-700 dark:text-indigo-300 font-bold' : 'text-slate-400'}`}>
-                                  10:00 - 12:00
+                                  {orario('ribollaMartedi', 'turno2')}
                                 </span>
                               </label>
                             </div>
@@ -2520,7 +2563,7 @@ try {
                                   className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4"
                                 />
                                 <span className={`text-[11px] font-medium ${roc.turno1 ? 'text-emerald-700 dark:text-emerald-300 font-bold' : 'text-slate-400'}`}>
-                                  8:00 - 10:00
+                                  {orario('roccastradaMercoledi', 'turno1')}
                                 </span>
                               </label>
 
@@ -2533,7 +2576,7 @@ try {
                                   className="rounded text-emerald-600 focus:ring-emerald-500 w-4 h-4"
                                 />
                                 <span className={`text-[11px] font-medium ${roc.turno2 ? 'text-emerald-700 dark:text-emerald-300 font-bold' : 'text-slate-400'}`}>
-                                  10:00 - 12:00
+                                  {orario('roccastradaMercoledi', 'turno2')}
                                 </span>
                               </label>
                             </div>
@@ -2852,12 +2895,12 @@ try {
                           {/* Ribolla breakdown */}
                           <td className="p-3 border-l border-slate-200 dark:border-slate-800 bg-indigo-50/20 dark:bg-indigo-950/10 text-center">
                             <div className="flex items-center justify-center gap-2">
-                              <span className="text-[11px] text-slate-600 dark:text-slate-400" title="Turno 8:00 - 10:00">
-                                8-10: <strong className="text-indigo-900 dark:text-indigo-200">{p.monthRibollaT1}</strong>
+                              <span className="text-[11px] text-slate-600 dark:text-slate-400" title={`Turno 1: ${orario('ribollaMartedi', 'turno1')}`}>
+                                T1: <strong className="text-indigo-900 dark:text-indigo-200">{p.monthRibollaT1}</strong>
                               </span>
                               <span className="text-slate-300 dark:text-slate-700">|</span>
-                              <span className="text-[11px] text-slate-600 dark:text-slate-400" title="Turno 10:00 - 12:00">
-                                10-12: <strong className="text-indigo-900 dark:text-indigo-200">{p.monthRibollaT2}</strong>
+                              <span className="text-[11px] text-slate-600 dark:text-slate-400" title={`Turno 2: ${orario('ribollaMartedi', 'turno2')}`}>
+                                T2: <strong className="text-indigo-900 dark:text-indigo-200">{p.monthRibollaT2}</strong>
                               </span>
                               <span className="px-1.5 py-0.2 rounded bg-indigo-100 dark:bg-indigo-950 text-[10px] font-bold text-indigo-700 dark:text-indigo-300">
                                 Tot: {p.monthRibollaTotal}
@@ -2868,12 +2911,12 @@ try {
                           {/* Roccastrada breakdown */}
                           <td className="p-3 border-l border-slate-200 dark:border-slate-800 bg-emerald-50/20 dark:bg-emerald-950/10 text-center">
                             <div className="flex items-center justify-center gap-2">
-                              <span className="text-[11px] text-slate-600 dark:text-slate-400" title="Turno 8:00 - 10:00">
-                                8-10: <strong className="text-emerald-900 dark:text-emerald-200">{p.monthRoccastradaT1}</strong>
+                              <span className="text-[11px] text-slate-600 dark:text-slate-400" title={`Turno 1: ${orario('roccastradaMercoledi', 'turno1')}`}>
+                                T1: <strong className="text-emerald-900 dark:text-emerald-200">{p.monthRoccastradaT1}</strong>
                               </span>
                               <span className="text-slate-300 dark:text-slate-700">|</span>
-                              <span className="text-[11px] text-slate-600 dark:text-slate-400" title="Turno 10:00 - 12:00">
-                                10-12: <strong className="text-emerald-900 dark:text-emerald-200">{p.monthRoccastradaT2}</strong>
+                              <span className="text-[11px] text-slate-600 dark:text-slate-400" title={`Turno 2: ${orario('roccastradaMercoledi', 'turno2')}`}>
+                                T2: <strong className="text-emerald-900 dark:text-emerald-200">{p.monthRoccastradaT2}</strong>
                               </span>
                               <span className="px-1.5 py-0.2 rounded bg-emerald-100 dark:bg-emerald-950 text-[10px] font-bold text-emerald-700 dark:text-emerald-300">
                                 Tot: {p.monthRoccastradaTotal}
@@ -2921,22 +2964,22 @@ try {
                             <div className="flex flex-wrap gap-1">
                               {p.availability.ribollaT1 && (
                                 <span className="px-1.5 py-0.2 bg-indigo-100 dark:bg-indigo-950/80 text-indigo-800 dark:text-indigo-300 rounded text-[9px] font-medium">
-                                  Rib 8-10
+                                  Rib {orario('ribollaMartedi', 'turno1')}
                                 </span>
                               )}
                               {p.availability.ribollaT2 && (
                                 <span className="px-1.5 py-0.2 bg-indigo-100 dark:bg-indigo-950/80 text-indigo-800 dark:text-indigo-300 rounded text-[9px] font-medium">
-                                  Rib 10-12
+                                  Rib {orario('ribollaMartedi', 'turno2')}
                                 </span>
                               )}
                               {p.availability.roccastradaT1 && (
                                 <span className="px-1.5 py-0.2 bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 rounded text-[9px] font-medium">
-                                  Roc 8-10
+                                  Roc {orario('roccastradaMercoledi', 'turno1')}
                                 </span>
                               )}
                               {p.availability.roccastradaT2 && (
                                 <span className="px-1.5 py-0.2 bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 rounded text-[9px] font-medium">
-                                  Roc 10-12
+                                  Roc {orario('roccastradaMercoledi', 'turno2')}
                                 </span>
                               )}
                               {p.totalAvailSlots === 0 && (
