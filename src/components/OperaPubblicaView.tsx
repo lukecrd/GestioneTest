@@ -1009,28 +1009,20 @@ try {
         const dateShort = formatShortDate(item.dateStr);
         const loc = locOf(item.dayOfWeek);
 
-        // Row 1 (Turno 1)
-        rows.push([
-          dateShort,
-          item.location,
-          orarioExcel(orario(loc, 'turno1')),
-          t1Active ? (t1Names || '') : '',
-        ]);
+        // Una riga per turno attivo, come nel foglio di stampa
+        const turni = [
+          ...(t1Active ? [{ key: 'turno1' as const, names: t1Names }] : []),
+          ...(t2Active ? [{ key: 'turno2' as const, names: t2Names }] : []),
+        ];
+        turni.forEach(turno => rows.push([dateShort, item.location, orarioExcel(orario(loc, turno.key)), turno.names]));
 
-        // Row 2 (Turno 2)
-        rows.push([
-          dateShort,
-          item.location,
-          orarioExcel(orario(loc, 'turno2')),
-          t2Active ? (t2Names || '') : '',
-        ]);
+        // Merge Data (A) and Luogo (B) columns across the shift rows
+        if (turni.length === 2) {
+          merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow + 1, c: 0 } });
+          merges.push({ s: { r: currentRow, c: 1 }, e: { r: currentRow + 1, c: 1 } });
+        }
 
-        // Merge Data column (A) for the two rows
-        merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow + 1, c: 0 } });
-        // Merge Luogo column (B) for the two rows
-        merges.push({ s: { r: currentRow, c: 1 }, e: { r: currentRow + 1, c: 1 } });
-
-        currentRow += 2;
+        currentRow += turni.length;
       });
     });
 
