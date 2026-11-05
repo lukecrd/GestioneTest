@@ -1308,7 +1308,15 @@ try {
     try {
       const token = await accediDrive(); // prima di tutto: il popup di Google deve partire dal clic
       const mese = `${MESI[meseTabella.m]} ${meseTabella.y}`;
-      const nome = `Tabella Informazioni - ${mese}.pdf`;
+      const nome = '00 - Tabella Informazioni.pdf';
+      // Nomi numerati dei file su Drive (il mese è nel nome della cartella); "mensile" è un PDF solo per incarichi e pulizie.
+      const nomiDrive: Partial<Record<SectionKey, string>> = {
+        vitaEMinistero: '01 - Programma Adunanza Infrasettimanale',
+        domenica: '02 - Programma Adunanza del fine settimana',
+        mensile: '03 - Programma Uscieri - Microfoni - Audio Video - riassetto - pulizie',
+        servizioCampo: '04 - Programma Adunanze per il Servizio di campo',
+        operaPubblica: '05 - Programma Espositori Mobili',
+      };
       // es. novembre 2026 -> "Tabella informazioni Roccastrada/2026 11"
       const cartella = await cartellaDrive(token, ['Tabella informazioni Roccastrada', `${meseTabella.y} ${String(meseTabella.m + 1).padStart(2, '0')}`]);
       const link: Record<string, string> = { zoom: ZOOM.url };
@@ -1320,7 +1328,7 @@ try {
             const foglio = foglioPdf(voce.sezione);
             if (!foglio) continue; // programma del mese non ancora pronto: riquadro senza link
             showToast(`Drive: carico "${voce.titolo}"…`);
-            const titolo = `${voce.titolo} - ${mese}`;
+            const titolo = nomiDrive[voce.sezione] || `${voce.titolo} - ${mese}`;
             perSezione[voce.sezione] = (await caricaSuDrive(token, await creaPdf(foglio, titolo), `${titolo}.pdf`, { pubblico: true, cartella })).webViewLink;
           }
           link[voce.img] = perSezione[voce.sezione]!;
