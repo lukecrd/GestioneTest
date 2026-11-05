@@ -370,3 +370,24 @@ test('presidente avoids the usciere of the same midweek evening', () => {
   assert.equal(solo.meetings[0].presidenteId, 'Anna');
   assert.ok(solo.warnings.some(w => w.includes('usciere')));
 });
+
+test('prayers rotate: whoever has gone longest without praying goes first, across the month', async () => {
+  const pray = id => participant(id, { preghiera: true });
+  const history = [
+    meeting('h1', '2026-09-02', { preghieraInizialeId: 'A', preghieraFinaleId: 'B' }),
+    meeting('h2', '2026-09-09', { preghieraInizialeId: 'C', preghieraFinaleId: 'D' }),
+    meeting('h3', '2026-09-16', { preghieraInizialeId: 'E', tesoriLetturaReaderId: 'F' }),
+  ];
+  const { meetings } = generate(['A', 'B', 'C', 'D', 'E', 'F'].map(pray),
+    [...history, meeting('t1', '2026-10-07'), meeting('t2', '2026-10-14'), meeting('t3', '2026-10-21')]);
+  const prayers = id => { const m = meetings.find(x => x.id === id); return [m.preghieraInizialeId, m.preghieraFinaleId].sort(); };
+  assert.deepEqual(prayers('t1'), ['A', 'F']); // F never prayed (reading does not count), A is the oldest
+  assert.deepEqual(prayers('t2'), ['B', 'C']);
+  assert.deepEqual(prayers('t3'), ['D', 'E']);
+
+  // Manual dropdown: same per-part order, even if someone did another part more recently.
+  const { computeVitaStats, compareParticipantsByLastAssignmentAsc } = await import('../src/utils/vitaEMinisteroStats.ts');
+  const people = ['A', 'C', 'E', 'F'].map(pray);
+  const stats = computeVitaStats(people, [...history, meeting('h4', '2026-09-30', { tesoriLetturaReaderId: 'A' })]);
+  assert.deepEqual(people.sort((a, b) => compareParticipantsByLastAssignmentAsc(a, b, stats, 'preghiera')).map(p => p.id), ['F', 'A', 'C', 'E']);
+});
