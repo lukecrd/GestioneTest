@@ -52,10 +52,31 @@ export async function accediDrive(): Promise<string> {
   return token;
 }
 
+// Cerca (o crea) le cartelle del percorso, una dentro l'altra, e restituisce l'id dell'ultima.
+// Con drive.file l'app vede solo le cartelle create da lei: una cartella con lo stesso nome fatta a mano non viene trovata.
+export async function cartellaDrive(token: string, percorso: string[]): Promise<string> {
+  let padre = 'root';
+  for (const nome of percorso) {
+    const q = `name = '${nome.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}' and mimeType = 'application/vnd.google-apps.folder' and '${padre}' in parents and trashed = false`;
+    const r = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)&pageSize=1`, { headers: { Authorization: `Bearer ${token}` } });
+    if (!r.ok) throw new Error(`Drive non ha trovato la cartella "${nome}" (errore ${r.status}).`);
+    const trovata = (await r.json()).files?.[0]?.id;
+    if (trovata) { padre = trovata; continue; }
+    const c = await fetch('https://www.googleapis.com/drive/v3/files?fields=id', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: nome, mimeType: 'application/vnd.google-apps.folder', parents: [padre] }),
+    });
+    if (!c.ok) throw new Error(`Drive non ha creato la cartella "${nome}" (errore ${c.status}).`);
+    padre = (await c.json()).id;
+  }
+  return padre;
+}
+
 // pubblico: "chiunque abbia il link può visualizzare" (i PDF dei programmi collegati dalla tabella, scelta dell'utente).
-export async function caricaSuDrive(token: string, file: Blob, nome: string, { pubblico = false } = {}): Promise<{ id: string; webViewLink: string }> {
+export async function caricaSuDrive(token: string, file: Blob, nome: string, { pubblico = false, cartella }: { pubblico?: boolean; cartella?: string } = {}): Promise<{ id: string; webViewLink: string }> {
   const corpo = new FormData();
-  corpo.append('metadata', new Blob([JSON.stringify({ name: nome, mimeType: file.type || 'application/pdf' })], { type: 'application/json' }));
+  corpo.append('metadata', new Blob([JSON.stringify({ name: nome, mimeType: file.type || 'application/pdf', ...(cartella && { parents: [cartella] }) })], { type: 'application/json' }));
   corpo.append('file', file);
   const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink', {
     method: 'POST',
