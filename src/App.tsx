@@ -61,7 +61,7 @@ import { TabellaInformazioniView, VOCI_TABELLA, ZOOM } from './components/Tabell
 import { MensileProgramSheet, MensileFieldKey, fmtShort } from './components/MensileProgramSheet';
 import { WeekendProgramSheet } from './components/WeekendProgramSheet';
 import { apriPdfProgramma, creaPdf } from './utils/programPdf';
-import { ACCOUNT_DRIVE, accediDrive, caricaSuDrive } from './lib/drive';
+import { ACCOUNT_DRIVE, accediDrive, caricaSuDrive, cartellaDrive } from './lib/drive';
 import { eliminaAllegato, leggiAllegato } from './lib/allegati';
 import { ModernSquareNavbar } from './components/ModernSquareNavbar';
 import { ConflittiSettimana } from './components/ConflittiSettimana';
@@ -1308,7 +1308,17 @@ try {
     try {
       const token = await accediDrive(); // prima di tutto: il popup di Google deve partire dal clic
       const mese = `${MESI[meseTabella.m]} ${meseTabella.y}`;
-      const nome = `Tabella Informazioni - ${mese}.pdf`;
+      const nome = '00 - Tabella Informazioni.pdf';
+      // Nomi numerati dei file su Drive (il mese è nel nome della cartella); "mensile" è un PDF solo per incarichi e pulizie.
+      const nomiDrive: Partial<Record<SectionKey, string>> = {
+        vitaEMinistero: '01 - Programma Adunanza Infrasettimanale',
+        domenica: '02 - Programma Adunanza del fine settimana',
+        mensile: '03 - Programma Uscieri - Microfoni - Audio Video - riassetto - pulizie',
+        servizioCampo: '04 - Programma Adunanze per il Servizio di campo',
+        operaPubblica: '05 - Programma Espositori Mobili',
+      };
+      // es. novembre 2026 -> "Tabella informazioni Roccastrada/2026 11"
+      const cartella = await cartellaDrive(token, ['Tabella informazioni Roccastrada', `${meseTabella.y} ${String(meseTabella.m + 1).padStart(2, '0')}`]);
       const link: Record<string, string> = { zoom: ZOOM.url };
       const perSezione: Partial<Record<SectionKey, string>> = {}; // incarichi settimanali e pulizie: stesso PDF mensile
       for (const voce of VOCI_TABELLA) {
@@ -1318,14 +1328,14 @@ try {
             const foglio = foglioPdf(voce.sezione);
             if (!foglio) continue; // programma del mese non ancora pronto: riquadro senza link
             showToast(`Drive: carico "${voce.titolo}"…`);
-            const titolo = `${voce.titolo} - ${mese}`;
-            perSezione[voce.sezione] = (await caricaSuDrive(token, await creaPdf(foglio, titolo), `${titolo}.pdf`, { pubblico: true })).webViewLink;
+            const titolo = nomiDrive[voce.sezione] || `${voce.titolo} - ${mese}`;
+            perSezione[voce.sezione] = (await caricaSuDrive(token, await creaPdf(foglio, titolo), `${titolo}.pdf`, { pubblico: true, cartella })).webViewLink;
           }
           link[voce.img] = perSezione[voce.sezione]!;
         } else if (allegato?.fileId) {
           showToast(`Drive: carico "${voce.titolo}"…`);
           const file = await leggiAllegato(allegato.fileId);
-          link[voce.img] = (await caricaSuDrive(token, file, allegato.nome || `${voce.titolo}.pdf`, { pubblico: true })).webViewLink;
+          link[voce.img] = (await caricaSuDrive(token, file, allegato.nome || `${voce.titolo}.pdf`, { pubblico: true, cartella })).webViewLink;
         } else if (allegato?.url) {
           link[voce.img] = allegato.url;
         }
@@ -1335,7 +1345,7 @@ try {
           isAdmin={false} onSalvaAllegato={() => {}} onErrore={() => {}} onApriPdf={() => Promise.resolve()} mese={meseTabella} />
       );
       const pdf = await creaPdf(tabella, nome, { stampa: false, larghezzaPx: 1000, finestraPx: 1280, unaPagina: true, link });
-      await caricaSuDrive(token, pdf, nome);
+      await caricaSuDrive(token, pdf, nome, { cartella });
       showToast(`Tabella salvata su Drive (${ACCOUNT_DRIVE}): ${nome}`);
     } catch (err: any) {
       console.error(err);
