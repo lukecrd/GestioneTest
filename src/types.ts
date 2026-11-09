@@ -313,10 +313,80 @@ export interface AssegnazioneTerritorio {
   proclamatore: string;
   assegnato: string; // YYYY-MM-DD
   rientro?: string;  // YYYY-MM-DD, assente finché il territorio è fuori
+  nonLavorato?: boolean; // restituito senza percorrerlo: non conta come lavorazione
+  etichetta?: string; // etichetta della registrazione, es. "Congresso campagna"
+}
+
+export type TipoIndirizzo = 'residenziale' | 'commerciale' | 'lingua-straniera';
+export type StatoIndirizzo = '' | 'visitato' | 'assente' | 'impegnato' | 'non-interessato' | 'rivisitare' | 'non-visitare' | 'non-avvicinarsi';
+
+export interface VisitaIndirizzo {
+  data: string; // YYYY-MM-DD
+  stato: StatoIndirizzo;
+  proclamatore?: string;
+}
+
+// Indirizzo dentro un territorio, con lo stato dell'ultima visita.
+export interface IndirizzoTerritorio {
+  id: string;
+  numero: string;
+  indirizzo: string;
+  tipo: TipoIndirizzo;
+  stato: StatoIndirizzo;
+  nota?: string;
+  porzione?: string; // parte del territorio, per consegnarne solo un pezzo
+  data: string; // YYYY-MM-DD, quando è stato aggiunto
+  visite: VisitaIndirizzo[]; // dalla più recente
+}
+
+// Etichetta libera (es. "Commerciale", "Campagna") applicata a più territori.
+export interface EtichettaTerritorio {
+  id: string;
+  nome: string;
+  colore: string; // #rrggbb
+  territori: string[]; // numeri, es. ["12", "35A"]
 }
 
 export interface TerritoriData {
   assegnazioni: AssegnazioneTerritorio[];
+  etichette: EtichettaTerritorio[];
+  note: Record<string, string>; // per numero: istruzioni per chi riceve il territorio
+  indirizzi: IndirizzoTerritorio[];
+  aggiunte: CartinaAggiunta[];
+  congregazione: MappaCongregazione | null; // confini importati da KML
+  impostazioni: ImpostazioniTerritori;
+}
+
+// Mappa della congregazione: coordinate come testo "lng,lat lng,lat ..." (Firestore non accetta array annidati).
+export interface FormaMappa {
+  nome: string;
+  tipo: 'poligono' | 'linea' | 'punto';
+  anelli: string[]; // poligono: primo anello esterno, gli altri buchi
+}
+
+export interface MappaCongregazione {
+  nome: string;
+  file: string;
+  caricato: string; // YYYY-MM-DD
+  forme: FormaMappa[];
+}
+
+// Territorio aggiunto (o PDF sostituito) dall'app: il PDF sta su Drive, non in src/territori/.
+export interface CartinaAggiunta {
+  numero: string;
+  nome: string;
+  link: string;    // webViewLink di Drive
+  driveId: string;
+  file: string;    // nome originale del PDF
+  caricato: string; // YYYY-MM-DD
+}
+
+export interface ImpostazioniTerritori {
+  mesiScadenza: number;
+  maxPerProclamatore: number; // 0 = nessun limite
+  mostraDisponibili: number;  // 0 = tutti
+  etichettaPredefinita: string; // id etichetta, '' = nessuna
+  azzeraStatiAlRientro: boolean; // al rientro gli stati tornano vuoti, tranne quelli permanenti
 }
 
 // Oratori della congregazione che tengono il discorso pubblico in altre congregazioni.

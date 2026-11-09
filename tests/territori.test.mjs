@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { scadenzaTerritorio, statoScadenza, giorniTra, alertTerritori, statisticheLavorazione, assegnazioneAperta, ultimoRientro, normalizeTerritori, parseCartina, dettaglioInSezione, cartineDaFile, raggruppaSezioni, annoDiServizio, righeS13, pagineS13, anniS13 } from '../src/utils/territori.js';
+import { scadenzaTerritorio, statoScadenza, giorniTra, alertTerritori, statisticheLavorazione, assegnazioneAperta, ultimoRientro, normalizeTerritori, parseCartina, dettaglioInSezione, cartineDaFile, raggruppaSezioni, annoDiServizio, righeS13, pagineS13, anniS13, parseNumeriTerritori, testoSu, copertura, filtraPerEtichette, SENZA_ETICHETTE, CON_ETICHETTE, statisticheMensili, rientratiDiRecente, registraVisita, azzeraStati, unisciCartine, ordinaIndirizzi, statisticaTerritori, erroreRegistrazione, applicaRientri, leggiKml, puntiAnello, importaRegistrazioni, dataExcel } from '../src/utils/territori.js';
 
 test('nome, codice e sezione dal nome del file', () => {
   assert.deepEqual(parseCartina('Territorio_01_Ribolla.pdf'), { numero: '1', nome: 'Ribolla', sezione: 'Ribolla' });
@@ -82,12 +82,34 @@ test('tempo di lavorazione: medie per territorio e quota rientrata entro 4 mesi'
     [100, 140, 1],
   );
   assert.equal(statisticheLavorazione([]).mediaGiorni, null);
+  // un rientro non percorso non è una lavorazione
+  assert.equal(statisticheLavorazione([{ id: 'x', numero: '5', assegnato: '2026-01-01', rientro: '2026-01-05', nonLavorato: true }]).concluse, 0);
+});
+
+test('copertura: lavorati negli ultimi 12 mesi, esclusi i rientri non percorsi', () => {
+  const territori = [{ numero: '1' }, { numero: '2' }, { numero: '3' }, { numero: '4' }];
+  const c = copertura(territori, [
+    { id: 'a', numero: '1', assegnato: '2026-01-01', rientro: '2026-03-01' },                    // dentro
+    { id: 'b', numero: '2', assegnato: '2025-01-01', rientro: '2025-10-01' },                    // troppo vecchio
+    { id: 'c', numero: '3', assegnato: '2026-05-01', rientro: '2026-05-10', nonLavorato: true }, // non percorso
+    { id: 'd', numero: '4', assegnato: '2026-09-01' },                                           // ancora fuori
+  ], '2026-11-08');
+  assert.deepEqual([c.lavorati, c.nonLavorati.map(t => t.numero), c.percentuale], [1, ['2', '3', '4'], 25]);
 });
 
 test('normalize: codici sempre testuali, scarta dati incompleti', () => {
   const n = normalizeTerritori({ assegnazioni: [{ id: 'a', numero: 2, assegnato: '2026-01-01' }, { id: 'b', numero: 3 }] });
   assert.deepEqual(n.assegnazioni.map(a => a.numero), ['2']);
-  assert.deepEqual(normalizeTerritori(undefined), { assegnazioni: [] });
+  assert.deepEqual(normalizeTerritori(undefined), { assegnazioni: [], etichette: [], note: {}, indirizzi: [], impostazioni: { mesiScadenza: 4, maxPerProclamatore: 0, mostraDisponibili: 0, etichettaPredefinita: '', azzeraStatiAlRientro: true }, aggiunte: [], congregazione: null });
+  const e = normalizeTerritori({ etichette: [{ id: 'x', nome: ' Campagna ', colore: 'rosso', territori: [12, '12', '35A'] }, { id: 'y', nome: '' }] }).etichette;
+  assert.deepEqual(e, [{ id: 'x', nome: 'Campagna', colore: '#5a6b7a', territori: ['12', '35A'] }]);
+});
+
+test('etichette: numeri dal testo e colore del testo leggibile', () => {
+  const validi = new Set(['1', '12', '35A']);
+  assert.deepEqual(parseNumeriTerritori('012, 35a;1 99  12', validi), { numeri: ['12', '35A', '1'], sconosciuti: ['99'] });
+  assert.equal(testoSu('#ffcc00'), '#111');
+  assert.equal(testoSu('#1a3d8f'), '#fff');
 });
 
 test('S-13: anno di servizio da settembre ad agosto', () => {
@@ -124,4 +146,164 @@ test('S-13: 20 righe per pagina e anni proposti', () => {
   assert.deepEqual(pagineS13(righe).map(p => p.length), [20, 20, 5]);
   assert.deepEqual(pagineS13([]), [[]]);
   assert.deepEqual(anniS13([{ assegnato: '2025-03-01', rientro: '2025-10-01' }], '2026-10-13'), [2027, 2026, 2025]);
+});
+
+test('impostazioni: valori fuori scala tornano ai predefiniti, scadenza configurabile', () => {
+  const i = normalizeTerritori({ etichette: [{ id: 'e', nome: 'X' }], impostazioni: { mesiScadenza: 6, maxPerProclamatore: -1, mostraDisponibili: 10, etichettaPredefinita: 'sparita' } }).impostazioni;
+  assert.deepEqual(i, { mesiScadenza: 6, maxPerProclamatore: 0, mostraDisponibili: 10, etichettaPredefinita: '', azzeraStatiAlRientro: true });
+  assert.equal(scadenzaTerritorio('2026-01-15', 6), '2026-07-15');
+  assert.equal(alertTerritori([{ id: 'a', numero: '1', assegnato: '2026-05-01' }], '2026-10-05', 6)[0].livello, 'vicino');
+});
+
+test('filtro etichette: qualsiasi, tutte, con e senza', () => {
+  assert.equal(filtraPerEtichette(['a'], []), true);
+  assert.equal(filtraPerEtichette(['a'], ['a', 'b']), true);
+  assert.equal(filtraPerEtichette(['a'], ['a', 'b'], true), false);
+  assert.equal(filtraPerEtichette([], [SENZA_ETICHETTE]), true);
+  assert.equal(filtraPerEtichette(['a'], [SENZA_ETICHETTE]), false);
+  assert.equal(filtraPerEtichette(['a'], [CON_ETICHETTE]), true);
+});
+
+test('statistiche mensili e rientri recenti', () => {
+  const list = [
+    { id: 'a', numero: '1', proclamatore: 'Anna', assegnato: '2026-09-10', rientro: '2026-10-05' },
+    { id: 'b', numero: '2', proclamatore: 'anna ', assegnato: '2026-10-01', rientro: '2026-11-02', nonLavorato: true },
+    { id: 'c', numero: '3', proclamatore: 'Bruno', assegnato: '2026-11-01' },
+  ];
+  assert.deepEqual(statisticheMensili(list, '2026-11-08', 3), [
+    { mese: '2026-11', completati: 0, partecipanti: 2 },
+    { mese: '2026-10', completati: 1, partecipanti: 1 },
+    { mese: '2026-09', completati: 0, partecipanti: 1 },
+  ]);
+  assert.deepEqual(rientratiDiRecente(list, '2026-11-08', 30).map(a => a.id), ['b']);
+});
+
+test('indirizzi: vecchi "non visitare" convertiti, visite e azzeramento al rientro', () => {
+  const { indirizzi } = normalizeTerritori({
+    indirizzi: [{ id: 'a', numero: 5, indirizzo: 'Via Roma 1', tipo: 'boh', stato: 'visitato', visite: [{ data: '2026-10-01', stato: 'visitato' }, { stato: 'x' }] }],
+    nonVisitare: [{ id: 'b', numero: '5', indirizzo: 'Via Po 2', data: '2026-09-01' }, { id: 'c', numero: '5', indirizzo: ' ' }],
+  });
+  assert.deepEqual(indirizzi.map(n => [n.id, n.numero, n.tipo, n.stato, n.visite.length]), [['a', '5', 'residenziale', 'visitato', 1], ['b', '5', 'residenziale', 'non-visitare', 0]]);
+
+  let v = registraVisita(indirizzi[0], 'assente', '2026-11-08', 'Anna');
+  v = registraVisita(v, 'rivisitare', '2026-11-08', 'Anna'); // stesso giorno e proclamatore: sostituisce
+  assert.deepEqual([v.stato, v.visite.map(x => x.stato)], ['rivisitare', ['rivisitare', 'visitato']]);
+
+  const dopo = azzeraStati([v, indirizzi[1], { ...v, id: 'z', numero: '6' }], '5');
+  assert.deepEqual(dopo.map(n => n.stato), ['', 'non-visitare', 'rivisitare']);
+  assert.equal(dopo[0].visite.length, 2);
+});
+
+test('cartine aggiunte dall app: nuove in ordine, stesso numero sostituisce il PDF del progetto', () => {
+  const daFile = [{ numero: '1', nome: 'Ribolla', sezione: 'Ribolla', file: 'a.pdf', url: '/a.pdf' }, { numero: '3', nome: 'Pari', sezione: 'Pari', file: 'c.pdf', url: '/c.pdf' }];
+  const link = 'https://drive.google.com/x';
+  const tutte = unisciCartine(daFile, [{ numero: '2', nome: 'Commerciale Pari 1', link }, { numero: '3', nome: 'Pari', link }]);
+  assert.deepEqual(tutte.map(c => [c.numero, c.sezione, c.url, !!c.aggiunta]), [['1', 'Ribolla', '/a.pdf', false], ['2', 'Commerciale', link, true], ['3', 'Pari', link, true]]);
+  const n = normalizeTerritori({ aggiunte: [{ numero: 4, nome: 'X', link }, { numero: '5', nome: 'Y', link: 'javascript:alert(1)' }, { numero: '', nome: 'Z', link }] });
+  assert.deepEqual(n.aggiunte.map(a => a.numero), ['4']);
+});
+
+test('indirizzi ordinati per porzione, senza porzione in fondo, civici in ordine numerico', () => {
+  const n = (indirizzo, porzione) => ({ indirizzo, porzione });
+  assert.deepEqual(
+    ordinaIndirizzi([n('Via Roma 10', ''), n('Via Po 2', 'B'), n('Via Roma 9', ''), n('Via Po 1', 'A')]).map(x => x.indirizzo),
+    ['Via Po 1', 'Via Po 2', 'Via Roma 9', 'Via Roma 10'],
+  );
+});
+
+test('statistica: riepilogo sul periodo, grafici e righe per territorio', () => {
+  const territori = [{ numero: '1' }, { numero: '2' }, { numero: '3' }, { numero: '4' }];
+  const a = (id, numero, proclamatore, assegnato, rientro, extra = {}) => ({ id, numero, proclamatore, assegnato, ...(rientro ? { rientro } : {}), ...extra });
+  const s = statisticaTerritori(territori, [
+    a('a', '1', 'Anna', '2026-07-01', '2026-08-26'),                         // 8 settimane, nel periodo
+    a('b', '1', 'Bruno', '2025-01-01', '2025-02-26'),                        // vecchia
+    a('c', '2', 'Carla', '2026-04-01'),                                     // fuori da oltre 6 mesi
+    a('d', '3', 'Anna', '2026-10-01', '2026-10-10', { nonLavorato: true }),  // non percorso
+    a('x', '9', 'Zeno', '2026-10-01'),                                      // territorio non in elenco
+  ], '2026-11-08', 6);
+  assert.deepEqual([s.totale, s.assegnati, s.completati, s.nonLavorati, s.mediaSettimane, s.partecipanti], [4, 1, 1, 2, 8, 2]);
+  assert.deepEqual(s.grafici.inLavorazione.map(g => g.valore), [1, 1, 1]);
+  assert.deepEqual(s.grafici.nonLavorati.map(g => g.valore), [2, 2, 2]);
+  assert.deepEqual(s.righe[0], { numero: '1', aperta: null, ultimoRientro: '2026-08-26', lavorazioni: 2, mediaSettimane: 8 });
+});
+
+test('registrazioni: date coerenti, un solo territorio aperto, nessuna sovrapposizione', () => {
+  const lista = [
+    { id: 'a', numero: '1', proclamatore: 'Anna', assegnato: '2026-01-10', rientro: '2026-03-01' },
+    { id: 'b', numero: '1', proclamatore: '', assegnato: '2026-06-01' },
+  ];
+  const r = (extra) => ({ id: 'n', numero: '1', proclamatore: 'X', ...extra });
+  const oggi = '2026-11-08';
+  assert.equal(erroreRegistrazione(r({ assegnato: '' }), lista, oggi), 'Indica la data di assegnazione.');
+  assert.match(erroreRegistrazione(r({ assegnato: '2026-04-01', rientro: '2026-03-01' }), lista, oggi), /precedere/);
+  assert.match(erroreRegistrazione(r({ assegnato: '2026-04-01' }), lista, oggi), /già assegnato/);
+  assert.match(erroreRegistrazione(r({ assegnato: '2026-02-01', rientro: '2026-02-20' }), lista, oggi), /sovrappone/);
+  assert.equal(erroreRegistrazione(r({ assegnato: '2026-03-01', rientro: '2026-05-31' }), lista, oggi), null); // stesso giorno del rientro precedente: ok
+  assert.equal(erroreRegistrazione({ ...lista[1], rientro: '2026-07-01' }, lista, oggi), null); // modifica di sé stessa
+});
+
+test('rientro di più territori insieme: salta quelli assegnati dopo la data e azzera gli stati', () => {
+  const dati = normalizeTerritori({
+    assegnazioni: [
+      { id: 'a', numero: '1', proclamatore: 'Anna', assegnato: '2026-09-01' },
+      { id: 'b', numero: '2', proclamatore: 'Bruno', assegnato: '2026-11-05' },
+      { id: 'c', numero: '3', proclamatore: 'Carla', assegnato: '2026-01-01', rientro: '2026-02-01' },
+    ],
+    indirizzi: [{ id: 'x', numero: '1', indirizzo: 'Via Roma 1', stato: 'assente' }, { id: 'y', numero: '1', indirizzo: 'Via Po 2', stato: 'non-visitare' }],
+  });
+  const r = applicaRientri(dati, ['a', 'b', 'c'], '2026-11-01', true);
+  assert.deepEqual(r.rientrati, ['1']);
+  assert.deepEqual(r.saltate.map(a => a.id), ['b']);
+  assert.deepEqual(r.dati.assegnazioni.map(a => [a.id, a.rientro ?? null, !!a.nonLavorato]), [['a', '2026-11-01', true], ['b', null, false], ['c', '2026-02-01', false]]);
+  assert.deepEqual(r.dati.indirizzi.map(n => n.stato), ['', 'non-visitare']);
+});
+
+test('KML: confini, linee e punti; coordinate arrotondate e senza doppioni', () => {
+  const kml = `<?xml version="1.0"?><kml><Document><name>Congregazione Roccastrada</name>
+    <Placemark><name><![CDATA[Confine & dintorni]]></name><MultiGeometry>
+      <Polygon><outerBoundaryIs><LinearRing><coordinates>
+        11.1234567,43.0000001,0 11.2,43.0,0 11.2,43.0,0 11.2,43.1,0 11.1234567,43.0000001,0
+      </coordinates></LinearRing></outerBoundaryIs></Polygon>
+    </MultiGeometry></Placemark>
+    <Placemark><name>Strada</name><LineString><coordinates>11,43 11.1,43.1</coordinates></LineString></Placemark>
+    <Placemark><name>Sala</name><Point><coordinates>11.05,43.05,0</coordinates></Point></Placemark>
+  </Document></kml>`;
+  const m = leggiKml(kml);
+  assert.equal(m.nome, 'Congregazione Roccastrada');
+  assert.deepEqual(m.forme.map(f => [f.nome, f.tipo]), [['Confine & dintorni', 'poligono'], ['Strada', 'linea'], ['Sala', 'punto']]);
+  assert.equal(m.forme[0].anelli[0], '11.12346,43 11.2,43 11.2,43.1 11.12346,43');
+  assert.deepEqual(puntiAnello(m.forme[2].anelli[0]), [[43.05, 11.05]]);
+  assert.throws(() => leggiKml('<kml><Document></Document></kml>'), /non contiene/);
+});
+
+test('import Excel: formato Hourglass, numeri "01", date seriali, righe scartate e doppioni', () => {
+  assert.equal(dataExcel(45889), '2025-08-20');
+  assert.equal(dataExcel('2026-03-01'), '2026-03-01');
+  assert.equal(dataExcel('3/1/26'), null);
+  const validi = new Set(['1', '2']);
+  const righe = [
+    { territory_number: '01', territory_locality: 'Ribolla', publisher: 'Anna', start: 45889, end: 45972, notes: '', tags: '' },
+    { territory_number: '01', territory_locality: 'Ribolla', publisher: '', start: 46038, end: 46102, notes: '', tags: 'Congresso campagna' },
+    { territory_number: '01', territory_locality: 'Ribolla', publisher: 'Bruno', start: 46122, end: '', notes: '', tags: '' },
+    { territory_number: '99', publisher: 'Zeno', start: 46122, end: '' },
+    { territory_number: '02', publisher: 'Carla', start: 'ieri', end: '' },
+  ];
+  let id = 0;
+  const r = importaRegistrazioni(righe, validi, [], 'sostituisci', '2026-11-08', () => 'id' + ++id);
+  assert.equal(r.importate, 3);
+  assert.deepEqual(r.assegnazioni.map(a => [a.numero, a.proclamatore, a.assegnato, a.rientro ?? null, a.etichetta ?? null]), [
+    ['1', 'Anna', '2025-08-20', '2025-11-11', null],
+    ['1', '', '2026-01-16', '2026-03-21', 'Congresso campagna'],
+    ['1', 'Bruno', '2026-04-10', null, null],
+  ]);
+  assert.deepEqual(r.scartate.map(x => x.riga), [5, 6]);
+  // stesso giorno: rientra da Bruno e riparte con Carla; non è un doppione
+  const stessoGiorno = importaRegistrazioni([
+    { territory_number: '2', publisher: 'Bruno', start: 46328, end: 46328 },
+    { territory_number: '2', publisher: 'Carla', start: 46328, end: '' },
+  ], validi, [], 'sostituisci', '2026-11-08');
+  assert.deepEqual([stessoGiorno.importate, stessoGiorno.doppioni, stessoGiorno.scartate.length], [2, 0, 0]);
+  // aggiungendo di nuovo lo stesso file non si duplica nulla
+  const di_nuovo = importaRegistrazioni(righe, validi, r.assegnazioni, 'aggiungi', '2026-11-08');
+  assert.deepEqual([di_nuovo.importate, di_nuovo.doppioni], [0, 3]);
 });
