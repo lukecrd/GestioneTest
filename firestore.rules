@@ -79,6 +79,23 @@ service cloud.firestore {
       allow delete: if amministratore();
     }
 
+    // Registro delle attività (src/lib/log.ts): ognuno scrive solo a proprio nome e con l'ora del server;
+    // lo legge solo l'amministratore; nessuno modifica o cancella le voci.
+    match /log/{id} {
+      allow read: if amministratore();
+      allow create: if membro()
+        && request.resource.data.keys().hasOnly(['uid', 'email', 'quando', 'azione', 'sezioni', 'dettaglio'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.quando == request.time
+        && request.resource.data.azione in ['accesso', 'modifica', 'utenti']
+        && (request.resource.data.azione != 'utenti' || amministratore())
+        && request.resource.data.sezioni is list
+        && request.resource.data.sezioni.size() <= 30
+        && request.resource.data.dettaglio is string
+        && request.resource.data.dettaglio.size() <= 300;
+    }
+
     match /utenti/{uid} {
       allow read: if autenticato() && (request.auth.uid == uid || amministratore());
 

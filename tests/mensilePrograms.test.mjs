@@ -73,6 +73,7 @@ test('actual App sync persists one edited month and preserves all other monthly 
     persistDomenicaPrograms: () => {}, menRows: menProgramsRef.current['2026-10'].rows, menTitle: 'Ottobre', menWarn: null, menMonth: 9, menYear: 2026,
     domRows: null, domTitle: 'Ottobre', domWarn: null, domMonth: 9, domYear: 2026,
     puoModificare: () => true, currentUser: { role: 'admin' },
+    registraModifica: () => {},
     pushActiveProgramsToFirestore: data => { payload = data; return Promise.resolve(); }, setSyncMsg: () => {}, setSyncClass: () => {},
   };
   const fn = new Function(...Object.keys(context), compiled + '; return syncActivePrograms;')(...Object.values(context));
