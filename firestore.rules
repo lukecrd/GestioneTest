@@ -84,7 +84,7 @@ service cloud.firestore {
     match /log/{id} {
       allow read: if amministratore();
       allow create: if membro()
-        && request.resource.data.keys().hasOnly(['uid', 'email', 'quando', 'azione', 'sezioni', 'dettaglio'])
+        && request.resource.data.keys().hasOnly(['uid', 'email', 'quando', 'azione', 'sezioni', 'dettaglio', 'modifiche'])
         && request.resource.data.uid == request.auth.uid
         && request.resource.data.email == request.auth.token.email
         && request.resource.data.quando == request.time
@@ -93,7 +93,9 @@ service cloud.firestore {
         && request.resource.data.sezioni is list
         && request.resource.data.sezioni.size() <= 30
         && request.resource.data.dettaglio is string
-        && request.resource.data.dettaglio.size() <= 300;
+        && request.resource.data.dettaglio.size() <= 300
+        && (!('modifiche' in request.resource.data)
+            || (request.resource.data.modifiche is list && request.resource.data.modifiche.size() <= 100));
     }
 
     match /utenti/{uid} {

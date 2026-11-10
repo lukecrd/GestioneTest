@@ -272,7 +272,11 @@ export default function App({ utente, onEsci }: { utente: AuthUser; onEsci: () =
   // Auto-save & Remote Firestore sync handler
   const saveState = (newState: StateData) => {
     newState = normalize(newState);
-    registraModifica(Object.keys(newState).filter(k => JSON.stringify((newState as any)[k]) !== JSON.stringify((state as any)[k])));
+    registraModifica(
+      Object.keys(newState).filter(k => JSON.stringify((newState as any)[k]) !== JSON.stringify((state as any)[k]))
+        .map(k => ({ sezione: k, prima: (state as any)[k], dopo: (newState as any)[k] })),
+      new Map(newState.people.map(p => [p.id, p.name])),
+    );
     setState(newState);
     storage.set(STORAGE_KEY, JSON.stringify(newState));
     setSyncMsg('Salvataggio Cloud…');
@@ -292,6 +296,7 @@ export default function App({ utente, onEsci }: { utente: AuthUser; onEsci: () =
 
   // Helper to sync active programs to Firestore
   const syncActivePrograms = (overrides: Partial<ActiveProgramsData>) => {
+    const primaMen = menProgramsRef.current, primaDom = domProgramsRef.current; // per il registro attività
     const year = overrides.domYear ?? domYear;
     const month = overrides.domMonth ?? domMonth;
     const key = domenicaPeriodKey(year, month);
@@ -342,7 +347,10 @@ export default function App({ utente, onEsci }: { utente: AuthUser; onEsci: () =
     };
     // Solo i cambi di contenuto: spostarsi di mese passa di qui ma non è una modifica.
     const cambiato = (prefisso: string) => ['Rows', 'Title', 'Warn', 'Programs'].some(k => prefisso + k in overrides);
-    registraModifica([...(cambiato('men') ? ['mensile'] : []), ...(cambiato('dom') ? ['domenica'] : [])]);
+    registraModifica([
+      ...(cambiato('men') ? [{ sezione: 'mensile', prima: primaMen, dopo: menProgramsRef.current }] : []),
+      ...(cambiato('dom') ? [{ sezione: 'domenica', prima: primaDom, dopo: domProgramsRef.current }] : []),
+    ]);
     pushActiveProgramsToFirestore(data, { men: puoModificare(currentUser, 'mensile'), dom: puoModificare(currentUser, 'domenica') }).catch((err) => {
       console.error('Active program sync error:', err);
       setSyncMsg('Offline — Programmi salvati in locale');

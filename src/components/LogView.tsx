@@ -1,24 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { ascoltaLog, AzioneLog, VoceLog } from '../lib/log';
+import { ascoltaLog, AzioneLog, SEZIONI_LOG, VoceLog } from '../lib/log';
 import { ProfiloUtente } from '../lib/utenti';
-
-// Nomi leggibili delle parti dei dati (chiavi di state) e dei due programmi in activePrograms.
-const SEZIONI: Record<string, string> = {
-  people: 'Persone',
-  unavail: 'Assenze',
-  special: 'Calendario',
-  groups: 'Gruppi',
-  programResponsibles: 'Responsabili dei programmi',
-  mensile: 'Programma mensile',
-  mensileArchives: 'Programma mensile (archivio)',
-  domenica: 'Adunanza domenica',
-  vitaEMinistero: 'Vita e ministero',
-  discorsiEsterni: 'Discorsi esterni',
-  servizioCampo: 'Servizio di campo',
-  operaPubblica: 'Opera pubblica',
-  territori: 'Territori',
-  tabellaAllegati: 'Tabella informazioni',
-};
 
 const AZIONI: Record<AzioneLog, string> = { accesso: 'Accesso', modifica: 'Modifica', utenti: 'Gestione utenti' };
 
@@ -47,7 +29,7 @@ export const LogView: React.FC<{ utenti: ProfiloUtente[] }> = ({ utenti }) => {
         <div>
           <h1 className="page-title">Registro attività</h1>
           <p className="page-description">
-            Chi è entrato nell'app e cosa ha modificato, dalla più recente. Le voci non si possono cambiare né cancellare. Più modifiche di fila diventano una voce sola.
+            Chi è entrato nell'app e cosa ha modificato, dalla più recente. Le voci non si possono cambiare né cancellare. Più modifiche di fila diventano una voce sola, con l'elenco di cosa è cambiato.
           </p>
         </div>
       </div>
@@ -92,7 +74,19 @@ export const LogView: React.FC<{ utenti: ProfiloUtente[] }> = ({ utenti }) => {
                       {nomi.has(v.uid) && <span className="block text-xs text-slate-500">{v.email}</span>}
                     </td>
                     <td className="whitespace-nowrap">{AZIONI[v.azione] ?? v.azione}</td>
-                    <td className="min-w-[240px]">{v.dettaglio || v.sezioni.map(s => SEZIONI[s] ?? s).join(', ') || '—'}</td>
+                    <td className="min-w-[320px] text-sm">
+                      {v.modifiche.length ? (
+                        <>
+                          <ul className="space-y-0.5">{v.modifiche.slice(0, 5).map((m, i) => <li key={i}>{m}</li>)}</ul>
+                          {v.modifiche.length > 5 && (
+                            <details className="mt-1">
+                              <summary className="cursor-pointer text-sky-700">Altre {v.modifiche.length - 5}</summary>
+                              <ul className="space-y-0.5 mt-1">{v.modifiche.slice(5).map((m, i) => <li key={i}>{m}</li>)}</ul>
+                            </details>
+                          )}
+                        </>
+                      ) : v.dettaglio || v.sezioni.map(s => SEZIONI_LOG[s] ?? s).join(', ') || '—'}
+                    </td>
                   </tr>
                 ))}
               </tbody>

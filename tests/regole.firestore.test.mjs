@@ -128,6 +128,8 @@ test('log: ognuno scrive a proprio nome con ora del server; legge solo amministr
   const voce = (uid, email, extra = {}) => ({ uid, email, quando: serverTimestamp(), azione: 'modifica', sezioni: ['territori'], dettaglio: '', ...extra });
   const lettore = come('lettore', 'lettore@test.it');
   await assertSucceeds(addDoc(collection(lettore, 'log'), voce('lettore', 'lettore@test.it')));
+  await assertSucceeds(addDoc(collection(lettore, 'log'), voce('lettore', 'lettore@test.it', { modifiche: ['Territori — assegnazioni: aggiunto 12'] })));
+  await assertFails(addDoc(collection(lettore, 'log'), voce('lettore', 'lettore@test.it', { modifiche: Array(101).fill('x') })));
   await assertFails(addDoc(collection(lettore, 'log'), voce('admin1', 'admin@test.it')));                         // a nome di un altro
   await assertFails(addDoc(collection(lettore, 'log'), voce('lettore', 'lettore@test.it', { quando: new Date('2020-01-01') }))); // ora finta
   await assertFails(addDoc(collection(lettore, 'log'), voce('lettore', 'lettore@test.it', { azione: 'utenti' })));    // solo l'admin
