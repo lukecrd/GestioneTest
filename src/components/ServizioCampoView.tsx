@@ -63,6 +63,7 @@ interface ServizioCampoViewProps {
   onShowToast: (msg: string) => void;
   checkAdminPermission: () => boolean;
   stampa?: boolean; // apre direttamente la sottoscheda di stampa (PDF della Tabella informazioni)
+  meseStampa?: { y: number; m: number }; // mese mostrato all'apertura (mese scelto nella Tabella informazioni)
 }
 
 const MESI = [
@@ -233,11 +234,12 @@ export function ServizioCampoView({
   isAdmin,
   onShowToast,
   checkAdminPermission,
-  stampa
+  stampa,
+  meseStampa
 }: ServizioCampoViewProps) {
   const now = new Date();
-  const [selectedMonth, setSelectedMonth] = useState<number>(now.getMonth());
-  const [selectedYear, setSelectedYear] = useState<number>(now.getFullYear());
+  const [selectedMonth, setSelectedMonth] = useState<number>(meseStampa?.m ?? now.getMonth());
+  const [selectedYear, setSelectedYear] = useState<number>(meseStampa?.y ?? now.getFullYear());
   const [generationWarnings, setGenerationWarnings] = useState<string[]>([]);
   const [activeSubTab, setActiveSubTab] = useState<'programma' | 'conduttori' | 'luoghi' | 'statistiche' | 'stampa'>(stampa ? 'stampa' : 'programma');
 
@@ -309,12 +311,8 @@ export function ServizioCampoView({
     const nonSalaPhysical = physicalOnly.filter(l => l !== 'Sala del Regno');
     if (nonSalaPhysical.length > 0) return nonSalaPhysical;
     if (physicalOnly.length > 0) return physicalOnly;
-    return locations;
+    return ['Sala del Regno'];
   }, [locations]);
-
-  // A location missing from the list shows as the first <select> option on screen but would print as-is: treat it as unset.
-  const isKnownLocation = (loc: string | undefined | null): loc is string => !!loc && locations.includes(loc);
-  const sundayFallbackLocation = locations.find(isZoomLocation) || locations[0];
 
   const saveServizioData = (updated: ServizioCampoData) => {
     onSaveState({
@@ -369,24 +367,29 @@ export function ServizioCampoView({
       const holidayName = ITALIAN_HOLIDAYS_FIXED[monthDayKey] || '';
       const inferredType: ServizioCampoMeetingType = holidayName ? 'festivo' : 'standard';
 
-      // Determine default location if not explicitly assigned
+      // Determine location: Sunday afternoon gets Zoom (defaultLocation / Zoom (Online)); other days rotate strictly among non-Zoom physical locations
       let assignedLocation: string;
       if (item.slotKey === 'domenicaPomeriggio') {
-        assignedLocation = isKnownLocation(slotDef.defaultLocation) ? slotDef.defaultLocation : sundayFallbackLocation;
-      } else if (isKnownLocation(slotDef.defaultLocation)) {
-        assignedLocation = slotDef.defaultLocation;
+        assignedLocation = slotDef.defaultLocation || 'Zoom (Online)';
       } else {
-        assignedLocation = rotationLocations[nonSundayRotationIndex % rotationLocations.length];
+        assignedLocation = rotationLocations[nonSundayRotationIndex % rotationLocations.length] || 'Sala del Regno';
         nonSundayRotationIndex++;
       }
 
       if (existing) {
+        // If existing record on non-Sunday somehow has Zoom, ensure it uses physical location
+        let existingLoc = existing.location;
+        if (item.slotKey !== 'domenicaPomeriggio' && isZoomLocation(existingLoc)) {
+          existingLoc = rotationLocations[0] || 'Sala del Regno';
+        } else if (item.slotKey === 'domenicaPomeriggio' && (!existingLoc || existingLoc === 'Sala del Regno')) {
+          existingLoc = slotDef.defaultLocation || 'Zoom (Online)';
+        }
+
         return {
           ...existing,
-          location: isKnownLocation(existing.location) ? existing.location : assignedLocation,
+          location: existingLoc,
           meetingType: existing.meetingType || (holidayName ? 'festivo' : 'standard'),
-          // Il nome della festività non va nelle note (anche se salvato in passato).
-          specialNote: (existing.specialNote && existing.specialNote !== holidayName ? existing.specialNote : '') || specialNoteFromGlobal
+          specialNote: existing.specialNote || holidayName || specialNoteFromGlobal
         };
       }
 
@@ -402,7 +405,7 @@ export function ServizioCampoView({
         location: assignedLocation,
         conductorId: null,
         isActive: slotDef.active !== false,
-        specialNote: specialNoteFromGlobal,
+        specialNote: holidayName ? `${holidayName}` : (specialNoteFromGlobal || ''),
         notes: ''
       };
       return newMeeting;
@@ -421,7 +424,7 @@ export function ServizioCampoView({
         std => std.dateStr === s.dateStr && std.slotKey === s.slotKey
       );
       return s.isCustom || s.slotKey === 'speciale' || !isStandardRecurring;
-    }).map(s => (isKnownLocation(s.location) ? s : { ...s, location: locations[0] }));
+    });
 
     // 3. Merge & sort chronologically by date and time
     const merged = [...standardItems, ...customItems];
@@ -470,17 +473,13 @@ export function ServizioCampoView({
       const slotDef = defaultSettings[slotKey] || DEFAULT_SLOT_SETTINGS[slotKey] || DEFAULT_SLOT_SETTINGS.speciale;
       const specialNote = meeting.specialNote || state.special[meeting.dateStr] || '';
 
-      // Determine meeting location: preserve existing if already specified, else use slot default or rotation
-      let meetingLocation = meeting.location;
-      if (!meetingLocation) {
-        if (slotKey === 'domenicaPomeriggio') {
-          meetingLocation = slotDef.defaultLocation || 'Zoom (Online)';
-        } else if (slotDef.defaultLocation && slotDef.defaultLocation !== 'rotazione') {
-          meetingLocation = slotDef.defaultLocation;
-        } else {
-          meetingLocation = rotationLocations[autoRotationIndex % rotationLocations.length] || 'Sala del Regno';
-          autoRotationIndex++;
-        }
+      // Determine meeting location: Sunday afternoon gets Zoom; others rotate continuously through physical locations
+      let meetingLocation: string;
+      if (slotKey === 'domenicaPomeriggio') {
+        meetingLocation = slotDef.defaultLocation || 'Zoom (Online)';
+      } else {
+        meetingLocation = rotationLocations[autoRotationIndex % rotationLocations.length] || 'Sala del Regno';
+        autoRotationIndex++;
       }
 
       // Find available candidates
@@ -1507,26 +1506,43 @@ await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(r
 
                           {/* Location selector */}
                           <td className="p-3">
-                            <select
-                              value={meeting.location}
-                              disabled={!isAdmin || isSuspended}
-                              onChange={e =>
-                                handleUpdateMeeting(meeting.id, meeting.dateStr, meeting.slotKey, {
-                                  location: e.target.value
-                                })
-                              }
-                              className={`inp py-1 px-2 text-xs font-semibold w-full ${
-                                isZoomLocation(meeting.location)
-                                  ? 'bg-emerald-50/60 dark:bg-emerald-950/30 text-emerald-900 dark:text-emerald-200 border-emerald-300 dark:border-emerald-800'
-                                  : 'text-slate-900 dark:text-slate-100'
-                              }`}
-                            >
-                              {locations.map(loc => (
-                                <option key={loc} value={loc}>
-                                  {isZoomLocation(loc) ? `💻 ${loc}` : loc}
-                                </option>
-                              ))}
-                            </select>
+                            {meeting.slotKey === 'domenicaPomeriggio' ? (
+                              <select
+                                value={meeting.location}
+                                disabled={!isAdmin || isSuspended}
+                                onChange={e =>
+                                  handleUpdateMeeting(meeting.id, meeting.dateStr, meeting.slotKey, {
+                                    location: e.target.value
+                                  })
+                                }
+                                className="inp py-1 px-2 text-xs font-bold w-full bg-emerald-50/60 dark:bg-emerald-950/30 text-emerald-900 dark:text-emerald-200 border-emerald-300 dark:border-emerald-800"
+                              >
+                                {locations.map(loc => (
+                                  <option key={loc} value={loc}>
+                                    {isZoomLocation(loc) ? `💻 ${loc} (Predefinito)` : loc}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <select
+                                value={isZoomLocation(meeting.location) ? (rotationLocations[0] || 'Sala del Regno') : meeting.location}
+                                disabled={!isAdmin || isSuspended}
+                                onChange={e =>
+                                  handleUpdateMeeting(meeting.id, meeting.dateStr, meeting.slotKey, {
+                                    location: e.target.value
+                                  })
+                                }
+                                className="inp py-1 px-2 text-xs font-medium w-full"
+                              >
+                                {locations
+                                  .filter(loc => !isZoomLocation(loc))
+                                  .map(loc => (
+                                    <option key={loc} value={loc}>
+                                      {loc}
+                                    </option>
+                                  ))}
+                              </select>
+                            )}
                           </td>
 
                           {/* Conductor selector */}
@@ -1727,11 +1743,16 @@ await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(r
                     onChange={e => setSpecialLocation(e.target.value)}
                     className="inp text-xs flex-1"
                   >
-                    {locations.map(loc => (
-                      <option key={loc} value={loc}>
-                        {isZoomLocation(loc) ? `💻 ${loc} (Online)` : loc}
-                      </option>
-                    ))}
+                    {locations
+                      .filter(loc => {
+                        const isSundayPomeriggio = isSundayDate(specialDateValue) && specialTimeSlot === 'pomeriggio';
+                        return isSundayPomeriggio ? true : !isZoomLocation(loc);
+                      })
+                      .map(loc => (
+                        <option key={loc} value={loc}>
+                          {isZoomLocation(loc) ? `💻 ${loc} (Online)` : loc}
+                        </option>
+                      ))}
                   </select>
                 </div>
               </div>
@@ -2112,7 +2133,7 @@ await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(r
               <div>
                 <h2 className="card-title">Orari e Gestione Luoghi dei 4 Appuntamenti</h2>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                  Configura gli orari standard e i luoghi per ciascun appuntamento. È possibile scegliere la rotazione automatica dei luoghi fisici o impostare un luogo fisso (inclusi <strong>Zoom</strong> o la Sala).
+                  La <strong>Domenica Pomeriggio</strong> è dedicata esclusivamente a <strong>Zoom (Online)</strong>. Tutti gli altri appuntamenti si svolgono in presenza <strong>a rotazione automatica</strong> tra i punti di ritrovo fisici registrati.
                 </p>
               </div>
             </div>
@@ -2122,7 +2143,6 @@ await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(r
                 const info = SLOT_INFO[slotKey];
                 const conf = defaultSettings[slotKey] || DEFAULT_SLOT_SETTINGS[slotKey];
                 const isSunday = slotKey === 'domenicaPomeriggio';
-                const isConfiguredZoom = isZoomLocation(conf.defaultLocation) || (isSunday && (!conf.defaultLocation || isZoomLocation(conf.defaultLocation)));
 
                 return (
                   <div key={slotKey} className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40 space-y-3">
@@ -2131,13 +2151,9 @@ await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(r
                         <info.icon className="w-4 h-4 text-amber-600" />
                         <span>{info.label}</span>
                       </div>
-                      {isConfiguredZoom ? (
+                      {isSunday ? (
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300">
-                          💻 Zoom
-                        </span>
-                      ) : conf.defaultLocation && conf.defaultLocation !== 'rotazione' ? (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300">
-                          📍 Fisso
+                          💻 Zoom Esclusivo
                         </span>
                       ) : (
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-sky-100 text-sky-800 dark:bg-sky-950 dark:text-sky-300">
@@ -2159,27 +2175,27 @@ await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(r
 
                     <div>
                       <label className="text-[11px] font-semibold text-slate-500">
-                        {isSunday ? 'Luogo Predefinito (Domenica)' : 'Luogo Predefinito / Rotazione'}
+                        {isSunday ? 'Luogo Predefinito (Domenica)' : 'Assegnazione Luogo'}
                       </label>
-                      <select
-                        disabled={!isAdmin}
-                        value={isKnownLocation(conf.defaultLocation) ? conf.defaultLocation : (isSunday ? sundayFallbackLocation : 'rotazione')}
-                        onChange={e => handleSaveSlotSetting(slotKey, { defaultLocation: e.target.value })}
-                        className={`inp py-1 px-2 text-xs mt-1 font-semibold ${
-                          isConfiguredZoom
-                            ? 'bg-emerald-50/50 dark:bg-emerald-950/30 text-emerald-900 dark:text-emerald-200 border-emerald-300 dark:border-emerald-800'
-                            : ''
-                        }`}
-                      >
-                        {!isSunday && (
-                          <option value="rotazione">🔄 A rotazione tra i luoghi fisici</option>
-                        )}
-                        {locations.map(loc => (
-                          <option key={loc} value={loc}>
-                            {isZoomLocation(loc) ? `💻 ${loc}` : loc}
-                          </option>
-                        ))}
-                      </select>
+                      {isSunday ? (
+                        <select
+                          disabled={!isAdmin}
+                          value={conf.defaultLocation || 'Zoom (Online)'}
+                          onChange={e => handleSaveSlotSetting(slotKey, { defaultLocation: e.target.value })}
+                          className="inp py-1 px-2 text-xs mt-1 font-semibold bg-emerald-50/50 dark:bg-emerald-950/30 text-emerald-900 dark:text-emerald-200 border-emerald-300 dark:border-emerald-800"
+                        >
+                          {locations.map(loc => (
+                            <option key={loc} value={loc}>
+                              {isZoomLocation(loc) ? `💻 ${loc} (Predefinito)` : loc}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        <div className="mt-1 p-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-[11px] text-slate-600 dark:text-slate-300 flex items-center gap-2">
+                          <span className="text-sky-500 font-bold">🔄</span>
+                          <span>Ruota tra i luoghi fisici (escluso Zoom)</span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -2194,7 +2210,7 @@ await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(r
                 <MapPin className="w-5 h-5 text-amber-600 dark:text-amber-400" />
                 <div>
                   <h2 className="card-title">Elenco Luoghi di Ritrovo ({locations.length})</h2>
-                  <p className="text-xs text-slate-500">I luoghi registrati possono essere selezionati per qualsiasi appuntamento o utilizzati nella rotazione automatica.</p>
+                  <p className="text-xs text-slate-500">I luoghi fisici sono usati a rotazione per Martedì, Giovedì e Sabato. Zoom è attivo solo ed esclusivamente la Domenica Pomeriggio.</p>
                 </div>
               </div>
 
@@ -2267,7 +2283,7 @@ await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(r
                             </span>
                           </div>
                           <span className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 ml-6 truncate">
-                            {isZoom ? 'Online (Zoom)' : 'In Rotazione fisica'}
+                            {isZoom ? 'Esclusivo: Domenica Pomeriggio' : 'In Rotazione: Mar, Gio, Sab'}
                           </span>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">

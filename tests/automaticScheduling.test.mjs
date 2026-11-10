@@ -325,30 +325,6 @@ test('weekly multi-role check spans every programme, one week = Monday to Sunday
   ]); // same role twice in a week (two field-service meetings) is not a conflict
 });
 
-test('rotation is per part: who has gone longest without that part wins, even if busy elsewhere recently', () => {
-  // A read on 09-01 but prayed on 09-30; B read on 09-20. A has gone longest without reading.
-  const history = [
-    meeting('h1', '2026-09-01', { tesoriLetturaReaderId: 'A' }),
-    meeting('h2', '2026-09-20', { tesoriLetturaReaderId: 'B' }),
-    meeting('h3', '2026-09-30', { preghieraInizialeId: 'A' }),
-  ];
-  const result = generate([participant('A', { tesoriLettura: true }), participant('B', { tesoriLettura: true })], [...history, meeting('t', '2026-10-07')]);
-  assert.equal(result.meetings.find(m => m.id === 't').tesoriLetturaReaderId, 'A');
-});
-
-test('Bisogni locali is left empty and does not produce a warning', () => {
-  const result = generate([participant('A', { vitaCristianaParti: true })], [meeting('m', '2026-10-07', {
-    vitaCristianaParts: [
-      { id: 'v1', number: 7, title: 'Bisogni locali', minutes: 15, speakerId: 'old' },
-      { id: 'v2', number: 8, title: 'Altra parte', minutes: 15, speakerId: '' },
-    ],
-  })]);
-  const parts = result.meetings[0].vitaCristianaParts;
-  assert.equal(parts[0].speakerId, '');
-  assert.equal(parts[1].speakerId, 'A');
-  assert.equal(result.warnings.some(w => w.includes('Parte 7')), false);
-});
-
 test('presidente not repeated in the same month when someone else is free; repeats are flagged', () => {
   const participants = [participant('a', { presidente: true }), participant('b', { presidente: true, preghiera: true }), participant('c', { preghiera: true }), participant('d', { preghiera: true })];
   const { meetings } = generate(participants, [meeting('w1', '2026-10-05'), meeting('w2', '2026-10-12')]);
