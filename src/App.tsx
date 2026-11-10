@@ -47,6 +47,8 @@ import {
 import { Person, StateData, MensileRow, DomenicaRow, DomenicaMonthProgram, MensileMonthProgram, ArchivedProgram, AuthUser, ChecklistProgramKey, TabellaAllegato } from './types';
 import { StatsView } from './components/StatsView';
 import { UtentiView } from './components/UtentiView';
+import { LogView } from './components/LogView';
+import { registraEvento, registraModifica } from './lib/log';
 import { ascoltaUtenti, ProfiloUtente } from './lib/utenti';
 import { contaInAttesa, puoVedere, puoModificare, chiaviStatoModificabili, PROGRAMMI } from './utils/utenti';
 import { OperaPubblicaView } from './components/OperaPubblicaView';
@@ -216,6 +218,16 @@ export default function App({ utente, onEsci }: { utente: AuthUser; onEsci: () =
   const [dbVuoto, setDbVuoto] = useState(false);
   const handleLogout = onEsci;
 
+  // Una voce "accesso" per sessione del browser, non a ogni ricarica della pagina.
+  useEffect(() => {
+    const chiave = 'log-accesso-' + currentUser.uid;
+    try {
+      if (sessionStorage.getItem(chiave)) return;
+      sessionStorage.setItem(chiave, '1');
+    } catch { /* senza sessionStorage si registra a ogni apertura */ }
+    registraEvento('accesso');
+  }, [currentUser.uid]);
+
   // Elenco utenti solo per gli amministratori (le regole lo negano agli altri).
   const [utenti, setUtenti] = useState<ProfiloUtente[]>([]);
   useEffect(() => {
@@ -260,6 +272,7 @@ export default function App({ utente, onEsci }: { utente: AuthUser; onEsci: () =
   // Auto-save & Remote Firestore sync handler
   const saveState = (newState: StateData) => {
     newState = normalize(newState);
+    registraModifica(Object.keys(newState).filter(k => JSON.stringify((newState as any)[k]) !== JSON.stringify((state as any)[k])));
     setState(newState);
     storage.set(STORAGE_KEY, JSON.stringify(newState));
     setSyncMsg('Salvataggio Cloud…');
@@ -327,6 +340,9 @@ export default function App({ utente, onEsci }: { utente: AuthUser; onEsci: () =
       domPrograms: updates,
       menPrograms: menUpdates,
     };
+    // Solo i cambi di contenuto: spostarsi di mese passa di qui ma non è una modifica.
+    const cambiato = (prefisso: string) => ['Rows', 'Title', 'Warn', 'Programs'].some(k => prefisso + k in overrides);
+    registraModifica([...(cambiato('men') ? ['mensile'] : []), ...(cambiato('dom') ? ['domenica'] : [])]);
     pushActiveProgramsToFirestore(data, { men: puoModificare(currentUser, 'mensile'), dom: puoModificare(currentUser, 'domenica') }).catch((err) => {
       console.error('Active program sync error:', err);
       setSyncMsg('Offline — Programmi salvati in locale');
@@ -1711,6 +1727,7 @@ try {
     territori: 'Territori',
     discorsiEsterni: 'Discorsi esterni',
     utenti: 'Utenti',
+    log: 'Registro attività',
     impostazioni: 'Assenze e calendario',
     statistiche: 'Statistiche',
   };
@@ -2951,6 +2968,9 @@ try {
       {activeTab === 'utenti' && currentUser.role === 'admin' && (
         <UtentiView utenti={utenti} mioUid={currentUser.uid} onShowToast={showToast} />
       )}
+
+      {/* ============ REGISTRO ATTIVITÀ (solo amministratori) ============ */}
+      {activeTab === 'log' && currentUser.role === 'admin' && <LogView utenti={utenti} />}
 
       {/* ============ DISCORSI ESTERNI ============ */}
       {activeTab === 'discorsiEsterni' && (

@@ -36,6 +36,7 @@ export type SectionKey =
   | 'territori'
   | 'discorsiEsterni'
   | 'utenti'
+  | 'log'
   | 'impostazioni'
   | 'statistiche';
 

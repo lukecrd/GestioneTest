@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Check, Eye, ShieldCheck, Trash2, UserX } from 'lucide-react';
 import { ProfiloUtente, Ruolo, cambiaPermessi, cambiaRuolo, eliminaProfilo } from '../lib/utenti';
 import { PROGRAMMI, RUOLI, ordinaUtenti } from '../utils/utenti';
+import { registraEvento } from '../lib/log';
 
 interface UtentiViewProps {
   utenti: ProfiloUtente[];
@@ -24,6 +25,7 @@ export const UtentiView: React.FC<UtentiViewProps> = ({ utenti, mioUid, onShowTo
     try {
       await azione();
       onShowToast(ok);
+      registraEvento('utenti', [], `${ok} (${u.email})`);
     } catch (err) {
       // permission-denied = le regole pubblicate in Firebase rifiutano la modifica.
       const codice = (err as { code?: string })?.code;

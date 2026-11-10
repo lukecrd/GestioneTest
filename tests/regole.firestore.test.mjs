@@ -5,7 +5,7 @@
 import test, { before, after, beforeEach } from 'node:test';
 import fs from 'node:fs';
 import { initializeTestEnvironment, assertFails, assertSucceeds } from '@firebase/rules-unit-testing';
-import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, deleteDoc, collection, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 
 const REGOLE = fs
   .readFileSync(process.env.REGOLE || new URL('../firestore.rules', import.meta.url), 'utf8')
@@ -122,4 +122,21 @@ test('allegati: li legge chi è approvato, li carica e cancella solo l\'admin, s
   await assertFails(setDoc(doc(come('lettore', 'lettore@test.it'), 'allegati/a4'), pdf));
   await assertFails(deleteDoc(doc(come('lettore', 'lettore@test.it'), 'allegati/a1')));
   await assertSucceeds(deleteDoc(doc(admin, 'allegati/a1')));
+});
+
+test('log: ognuno scrive a proprio nome con ora del server; legge solo amministratore; nessuno modifica o cancella', async () => {
+  const voce = (uid, email, extra = {}) => ({ uid, email, quando: serverTimestamp(), azione: 'modifica', sezioni: ['territori'], dettaglio: '', ...extra });
+  const lettore = come('lettore', 'lettore@test.it');
+  await assertSucceeds(addDoc(collection(lettore, 'log'), voce('lettore', 'lettore@test.it')));
+  await assertFails(addDoc(collection(lettore, 'log'), voce('admin1', 'admin@test.it')));                         // a nome di un altro
+  await assertFails(addDoc(collection(lettore, 'log'), voce('lettore', 'lettore@test.it', { quando: new Date('2020-01-01') }))); // ora finta
+  await assertFails(addDoc(collection(lettore, 'log'), voce('lettore', 'lettore@test.it', { azione: 'utenti' })));    // solo l'admin
+  await assertFails(addDoc(collection(lettore, 'log'), voce('lettore', 'lettore@test.it', { extra: 1 })));
+  await assertFails(addDoc(collection(come('attesa', 'attesa@test.it'), 'log'), voce('attesa', 'attesa@test.it'))); // non approvato
+  await assertFails(getDocs(collection(lettore, 'log')));
+  const admin = come('admin1', 'admin@test.it');
+  const ref = await addDoc(collection(admin, 'log'), voce('admin1', 'admin@test.it', { azione: 'utenti', dettaglio: 'x' }));
+  await assertSucceeds(getDocs(collection(admin, 'log')));
+  await assertFails(updateDoc(ref, { dettaglio: 'cambiato' }));
+  await assertFails(deleteDoc(ref));
 });
