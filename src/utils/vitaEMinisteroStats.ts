@@ -251,13 +251,25 @@ export function computeVitaStats(
  * 3. Participants who were assigned most recently (latest date) SINK TO THE BOTTOM.
  * 4. Tie-breakers: lower total assignments count, then alphabetical name.
  */
+/** Most recent date (YYYY-MM-DD) the participant did this part, '' if never. */
+export function lastRoleDate(stat: ParticipantVitaStats | undefined, role: VitaRoleCategory): string {
+  return (stat?.assignments || []).reduce((last, a) => a.roleCategory === role && a.dateStr > last ? a.dateStr : last, '');
+}
+
+// role: rotation per part first (as the automatic scheduling does), then the rule above.
 export function compareParticipantsByLastAssignmentAsc(
   a: VitaEMinisteroParticipant,
   b: VitaEMinisteroParticipant,
-  statsMap: Map<string, ParticipantVitaStats>
+  statsMap: Map<string, ParticipantVitaStats>,
+  role?: VitaRoleCategory
 ): number {
   const statsA = statsMap.get(a.id);
   const statsB = statsMap.get(b.id);
+
+  if (role) {
+    const byRole = lastRoleDate(statsA, role).localeCompare(lastRoleDate(statsB, role));
+    if (byRole) return byRole;
+  }
 
   const dateA = statsA?.lastAssignmentDate || '';
   const dateB = statsB?.lastAssignmentDate || '';

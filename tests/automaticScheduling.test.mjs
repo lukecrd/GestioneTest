@@ -325,6 +325,30 @@ test('weekly multi-role check spans every programme, one week = Monday to Sunday
   ]); // same role twice in a week (two field-service meetings) is not a conflict
 });
 
+test('rotation is per part: who has gone longest without that part wins, even if busy elsewhere recently', () => {
+  // A read on 09-01 but prayed on 09-30; B read on 09-20. A has gone longest without reading.
+  const history = [
+    meeting('h1', '2026-09-01', { tesoriLetturaReaderId: 'A' }),
+    meeting('h2', '2026-09-20', { tesoriLetturaReaderId: 'B' }),
+    meeting('h3', '2026-09-30', { preghieraInizialeId: 'A' }),
+  ];
+  const result = generate([participant('A', { tesoriLettura: true }), participant('B', { tesoriLettura: true })], [...history, meeting('t', '2026-10-07')]);
+  assert.equal(result.meetings.find(m => m.id === 't').tesoriLetturaReaderId, 'A');
+});
+
+test('Bisogni locali is left empty and does not produce a warning', () => {
+  const result = generate([participant('A', { vitaCristianaParti: true })], [meeting('m', '2026-10-07', {
+    vitaCristianaParts: [
+      { id: 'v1', number: 7, title: 'Bisogni locali', minutes: 15, speakerId: 'old' },
+      { id: 'v2', number: 8, title: 'Altra parte', minutes: 15, speakerId: '' },
+    ],
+  })]);
+  const parts = result.meetings[0].vitaCristianaParts;
+  assert.equal(parts[0].speakerId, '');
+  assert.equal(parts[1].speakerId, 'A');
+  assert.equal(result.warnings.some(w => w.includes('Parte 7')), false);
+});
+
 test('presidente not repeated in the same month when someone else is free; repeats are flagged', () => {
   const participants = [participant('a', { presidente: true }), participant('b', { presidente: true, preghiera: true }), participant('c', { preghiera: true }), participant('d', { preghiera: true })];
   const { meetings } = generate(participants, [meeting('w1', '2026-10-05'), meeting('w2', '2026-10-12')]);
@@ -345,4 +369,25 @@ test('presidente avoids the usciere of the same midweek evening', () => {
   const solo = generate([participants[0]], [meeting('w1', '2026-10-05')], {}, { mensileRows });
   assert.equal(solo.meetings[0].presidenteId, 'Anna');
   assert.ok(solo.warnings.some(w => w.includes('usciere')));
+});
+
+test('prayers rotate: whoever has gone longest without praying goes first, across the month', async () => {
+  const pray = id => participant(id, { preghiera: true });
+  const history = [
+    meeting('h1', '2026-09-02', { preghieraInizialeId: 'A', preghieraFinaleId: 'B' }),
+    meeting('h2', '2026-09-09', { preghieraInizialeId: 'C', preghieraFinaleId: 'D' }),
+    meeting('h3', '2026-09-16', { preghieraInizialeId: 'E', tesoriLetturaReaderId: 'F' }),
+  ];
+  const { meetings } = generate(['A', 'B', 'C', 'D', 'E', 'F'].map(pray),
+    [...history, meeting('t1', '2026-10-07'), meeting('t2', '2026-10-14'), meeting('t3', '2026-10-21')]);
+  const prayers = id => { const m = meetings.find(x => x.id === id); return [m.preghieraInizialeId, m.preghieraFinaleId].sort(); };
+  assert.deepEqual(prayers('t1'), ['A', 'F']); // F never prayed (reading does not count), A is the oldest
+  assert.deepEqual(prayers('t2'), ['B', 'C']);
+  assert.deepEqual(prayers('t3'), ['D', 'E']);
+
+  // Manual dropdown: same per-part order, even if someone did another part more recently.
+  const { computeVitaStats, compareParticipantsByLastAssignmentAsc } = await import('../src/utils/vitaEMinisteroStats.ts');
+  const people = ['A', 'C', 'E', 'F'].map(pray);
+  const stats = computeVitaStats(people, [...history, meeting('h4', '2026-09-30', { tesoriLetturaReaderId: 'A' })]);
+  assert.deepEqual(people.sort((a, b) => compareParticipantsByLastAssignmentAsc(a, b, stats, 'preghiera')).map(p => p.id), ['F', 'A', 'C', 'E']);
 });

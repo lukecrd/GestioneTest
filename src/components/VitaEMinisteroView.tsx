@@ -29,6 +29,8 @@ import {
 import {
   computeVitaStats,
   compareParticipantsByLastAssignmentAsc,
+  VITA_ROLE_LABELS,
+  type VitaRoleCategory,
 } from '../utils/vitaEMinisteroStats';
 import {
   getEffectivePartTypes,
@@ -632,6 +634,7 @@ export function VitaEMinisteroView({
     requiredPartTypeIds?: string[],
     onlyEligible = false
   ) => {
+    const role = roleKey as VitaRoleCategory | undefined; // le chiavi dei ruoli sono le stesse delle categorie
     const eligible = participants
       .filter(p => {
         const matchGender = !filterGender || p.gender === filterGender;
@@ -639,19 +642,21 @@ export function VitaEMinisteroView({
         const matchPartType = !requiredPartTypeIds || isParticipantEligibleForPartTypes(p.roles, requiredPartTypeIds);
         return matchGender && matchRole && matchPartType;
       })
-      .sort((a, b) => compareParticipantsByLastAssignmentAsc(a, b, statsMap));
+      .sort((a, b) => compareParticipantsByLastAssignmentAsc(a, b, statsMap, role));
 
     const others = participants
       .filter(p => !eligible.some(el => el.id === p.id))
-      .sort((a, b) => compareParticipantsByLastAssignmentAsc(a, b, statsMap));
+      .sort((a, b) => compareParticipantsByLastAssignmentAsc(a, b, statsMap, role));
 
     const formatOptionLabel = (p: VitaEMinisteroParticipant) => {
       const s = statsMap.get(p.id);
       const genderStr = p.gender === 'M' ? 'Fratello' : 'Sorella';
+      // assignments è in ordine decrescente: la prima di questa parte è la più recente.
+      const parte = role ? ` — ${VITA_ROLE_LABELS[role]}: ${s?.assignments.find(a => a.roleCategory === role)?.dateLabel || 'mai'}` : '';
       if (!s || !s.lastAssignmentDate) {
-        return `${p.name} (${genderStr}) — ★ Pronto (Mai assegnato)`;
+        return `${p.name} (${genderStr})${parte} — ★ Pronto (Mai assegnato)`;
       }
-      return `${p.name} (${genderStr}) — Ultima: ${s.lastAssignmentLabel} [tot. ${s.totalAssignments}]`;
+      return `${p.name} (${genderStr})${parte} — Ultima: ${s.lastAssignmentLabel} [tot. ${s.totalAssignments}]`;
     };
 
     return (
