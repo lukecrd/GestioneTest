@@ -8,7 +8,8 @@ export function normalizeDiscorsiEsterni(raw) {
       .map(o => ({ ...o, schemi: Array.isArray(o.schemi) ? [...new Set(o.schemi.filter(s => typeof s === 'string'))] : [] }))
     : [];
   const uscite = Array.isArray(raw?.uscite)
-    ? raw.uscite.filter(u => u?.id && u.data && u.oratore && u.titolo && u.congregazione)
+    // schema e congregazione si possono decidere dopo: bastano data e oratore
+    ? raw.uscite.filter(u => u?.id && u.data && u.oratore).map(u => ({ ...u, titolo: u.titolo || '', congregazione: u.congregazione || '' }))
     : [];
   return { oratori, uscite };
 }

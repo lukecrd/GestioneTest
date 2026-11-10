@@ -125,20 +125,22 @@ export const DiscorsiEsterniView: React.FC<DiscorsiEsterniViewProps> = ({ state,
     e.preventDefault();
     if (!checkAdminPermission()) return;
     const uscita: UscitaDiscorso = { id: crypto.randomUUID(), ...form, congregazione: form.congregazione.trim() };
-    if (!uscita.data || !uscita.orario || !uscita.oratore || !uscita.titolo || !uscita.congregazione) return onShowToast('Compila data, orario, oratore, schema e congregazione.');
+    if (!uscita.data || !uscita.oratore) return onShowToast('Scegli almeno data e oratore.');
     const conflitto = conflittoUscita(uscite, uscita);
-    if (conflitto) return onShowToast(`${uscita.oratore} è già a ${conflitto.congregazione} il ${dataIt(conflitto.data)}.`);
-    const prima = giaPresentato(uscite, uscita);
+    if (conflitto) return onShowToast(`${uscita.oratore} ha già un'uscita${conflitto.congregazione ? ` a ${conflitto.congregazione}` : ''} il ${dataIt(conflitto.data)}.`);
+    const prima = uscita.titolo && uscita.congregazione ? giaPresentato(uscite, uscita) : null;
     if (prima && !window.confirm(`${uscita.oratore} ha già portato questo schema a ${prima.congregazione} il ${dataIt(prima.data)}. Programmarlo di nuovo?`)) return;
     save({ ...data, uscite: [...uscite, uscita] });
     setForm({ data: '', orario: uscita.orario || '', oratore: uscita.oratore, titolo: '', congregazione: '' });
-    onShowToast(`Uscita di ${uscita.oratore} a ${uscita.congregazione} aggiunta.`);
+    onShowToast(`Uscita di ${uscita.oratore} del ${dataIt(uscita.data)} aggiunta.`);
   };
 
   const aggiornaUscita = (id: string, patch: Partial<UscitaDiscorso>) => {
     if (!checkAdminPermission()) return;
     save({ ...data, uscite: uscite.map(u => (u.id === id ? { ...u, ...patch } : u)) });
   };
+
+  const daDefinire = <span className="text-slate-500">da definire</span>;
 
   const eliminaUscita = (u: UscitaDiscorso) => {
     if (!checkAdminPermission()) return;
@@ -175,8 +177,34 @@ export const DiscorsiEsterniView: React.FC<DiscorsiEsterniViewProps> = ({ state,
                 ) : u.orario || <span className="text-slate-500">da definire</span>}
               </td>
               <td className="whitespace-nowrap">{u.oratore}</td>
-              <td className="min-w-[240px]">{conNumero(u.titolo)}</td>
-              <td className="whitespace-nowrap">{u.congregazione}</td>
+              <td className="min-w-[240px]">
+                {isAdmin ? (
+                  <select
+                    className="inp !min-h-0 !py-1"
+                    value={u.titolo}
+                    aria-label={`Schema dell'uscita di ${u.oratore} del ${dataIt(u.data)}`}
+                    onChange={e => aggiornaUscita(u.id, { titolo: e.target.value })}
+                  >
+                    <option value="">Da definire</option>
+                    {/* lo schema già scelto resta nel menu anche se l'oratore non l'ha più tra i preparati */}
+                    {[...new Set([...(u.titolo ? [u.titolo] : []), ...(oratori.find(o => o.nome === u.oratore)?.schemi || [])])].map(t => (
+                      <option key={t} value={t}>{conNumero(t)}</option>
+                    ))}
+                  </select>
+                ) : u.titolo ? conNumero(u.titolo) : daDefinire}
+              </td>
+              <td className="whitespace-nowrap">
+                {isAdmin ? (
+                  <input
+                    className="inp !min-h-0 !py-1 w-[180px]"
+                    list="congregazioni-uscite"
+                    defaultValue={u.congregazione}
+                    placeholder="Da definire"
+                    aria-label={`Congregazione dell'uscita di ${u.oratore} del ${dataIt(u.data)}`}
+                    onBlur={e => e.target.value.trim() !== u.congregazione && aggiornaUscita(u.id, { congregazione: e.target.value.trim() })}
+                  />
+                ) : u.congregazione || daDefinire}
+              </td>
               {isAdmin && (
                 <td className="text-right">
                   <button type="button" className="icon-btn" onClick={() => eliminaUscita(u)} title="Elimina uscita">
@@ -264,13 +292,14 @@ export const DiscorsiEsterniView: React.FC<DiscorsiEsterniViewProps> = ({ state,
       {isAdmin && oratori.length > 0 && (
         <form onSubmit={aggiungiUscita} className="card grid gap-3 md:grid-cols-2 xl:grid-cols-[150px_120px_190px_1fr_200px_auto] xl:items-end">
           <h2 className="card-title md:col-span-2 xl:col-span-6">Programma un'uscita</h2>
+          <p className="text-sm text-slate-600 md:col-span-2 xl:col-span-6 -mt-2">Bastano data e oratore: orario, schema e congregazione si possono aggiungere dopo nell'elenco.</p>
           <div>
             <label className="lbl" htmlFor="uscita-data">Data</label>
             <input id="uscita-data" type="date" className="inp mt-1" value={form.data} onChange={e => setForm({ ...form, data: e.target.value })} required />
           </div>
           <div>
             <label className="lbl" htmlFor="uscita-orario">Orario</label>
-            <input id="uscita-orario" type="time" className="inp mt-1" value={form.orario} onChange={e => setForm({ ...form, orario: e.target.value })} required />
+            <input id="uscita-orario" type="time" className="inp mt-1" value={form.orario} onChange={e => setForm({ ...form, orario: e.target.value })} />
           </div>
           <div>
             <label className="lbl" htmlFor="uscita-oratore">Oratore</label>
@@ -281,9 +310,9 @@ export const DiscorsiEsterniView: React.FC<DiscorsiEsterniViewProps> = ({ state,
           </div>
           <div className="min-w-0">
             <label className="lbl" htmlFor="uscita-schema">Schema</label>
-            <select id="uscita-schema" className="inp mt-1" value={form.titolo} onChange={e => setForm({ ...form, titolo: e.target.value })} disabled={!schemiOratore.length} required>
+            <select id="uscita-schema" className="inp mt-1" value={form.titolo} onChange={e => setForm({ ...form, titolo: e.target.value })} disabled={!schemiOratore.length}>
               <option value="">
-                {!form.oratore ? 'Prima scegli l\'oratore' : schemiOratore.length ? 'Scegli lo schema…' : 'Nessuno schema preparato'}
+                {!form.oratore ? 'Prima scegli l\'oratore' : schemiOratore.length ? 'Da definire' : 'Nessuno schema preparato'}
               </option>
               {schemiOratore.map(t => <option key={t} value={t}>{conNumero(t)}</option>)}
             </select>
@@ -295,7 +324,7 @@ export const DiscorsiEsterniView: React.FC<DiscorsiEsterniViewProps> = ({ state,
           </div>
           <div>
             <label className="lbl" htmlFor="uscita-congregazione">Congregazione</label>
-            <input id="uscita-congregazione" className="inp mt-1" list="congregazioni-uscite" value={form.congregazione} onChange={e => setForm({ ...form, congregazione: e.target.value })} placeholder="Es. Grosseto Nord" required />
+            <input id="uscita-congregazione" className="inp mt-1" list="congregazioni-uscite" value={form.congregazione} onChange={e => setForm({ ...form, congregazione: e.target.value })} placeholder="Da definire" />
             <datalist id="congregazioni-uscite">
               {congregazioni.map(c => <option key={c} value={c} />)}
             </datalist>
