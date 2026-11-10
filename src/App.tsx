@@ -1723,7 +1723,7 @@ try {
           onSelectTab={(tab) => setActiveTab(tab)}
           visibile={sez => puoVedere(currentUser, sez)}
           peopleCount={state.people.length}
-          territoriAlert={alertTerritori(normalizeTerritori(state.territori).assegnazioni).length}
+          territoriAlert={(t => alertTerritori(t.assegnazioni, undefined, t.impostazioni.mesiScadenza))(normalizeTerritori(state.territori)).length}
           utentiInAttesa={currentUser.role === 'admin' ? contaInAttesa(utenti) : null}
         />
 

@@ -779,7 +779,7 @@ export const TerritoriView: React.FC<TerritoriViewProps> = ({ state, onSaveState
           {isAdmin && (
             driveConfigurato() ? (
               <details className="mb-4 rounded-lg border border-slate-200 px-4 py-2.5">
-                <summary className="cursor-pointer font-semibold text-slate-900">Aggiungi un territorio</summary>
+                <summary className="cursor-pointer font-semibold text-slate-900">Aggiungi un territorio o carica una cartina</summary>
                 <form onSubmit={aggiungiCartina} className="flex flex-wrap items-end gap-3 mt-3">
                   <div className="w-28">
                     <label className="lbl" htmlFor="cartina-numero">Numero</label>
@@ -845,7 +845,7 @@ export const TerritoriView: React.FC<TerritoriViewProps> = ({ state, onSaveState
                         <table className="tbl table-fixed min-w-[720px]">
                           <colgroup>
                             <col className="w-[30%]" />
-                            <col className="w-[140px]" />
+                            <col className="w-[160px]" />
                             <col />
                             {isAdmin && <col className="w-[170px]" />}
                           </colgroup>
@@ -886,9 +886,19 @@ export const TerritoriView: React.FC<TerritoriViewProps> = ({ state, onSaveState
                                       )}
                                     </td>
                                     <td>
-                                      <a className="btn-ghost" href={t.url} target="_blank" rel="noopener noreferrer" title={t.file}>
-                                        <FileText className="w-4 h-4" /> Apri PDF
-                                      </a>
+                                      <div className="flex flex-col items-start gap-1">
+                                        <a className="btn-ghost" href={t.url} target="_blank" rel="noopener noreferrer" title={t.file}>
+                                          <FileText className="w-4 h-4" /> Apri PDF
+                                        </a>
+                                        {isAdmin && driveConfigurato() && (
+                                          <label className={`btn-ghost !min-h-0 !py-1 cursor-pointer ${caricando ? 'opacity-50 pointer-events-none' : ''}`}
+                                            aria-label={`Carica PDF della cartina del territorio ${t.numero}`}>
+                                            <Upload className="w-4 h-4" /> {caricando === t.numero ? 'Caricamento…' : 'Carica PDF'}
+                                            <input type="file" accept="application/pdf" className="sr-only"
+                                              onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; caricaCartina(t.numero, t.nome, f); }} />
+                                          </label>
+                                        )}
+                                      </div>
                                     </td>
                                     <td>
                                       {aperta ? (
@@ -910,15 +920,16 @@ export const TerritoriView: React.FC<TerritoriViewProps> = ({ state, onSaveState
                                     {isAdmin && (
                                       <td className="text-right whitespace-nowrap">
                                         {aperta ? (
-                                          <>
-                                            <button type="button" className="btn-ghost" onClick={() => segnaRientro(aperta)}>
+                                          // impilati: affiancati non stanno nella colonna e vengono tagliati
+                                          <div className="flex flex-col items-stretch gap-1.5">
+                                            <button type="button" className="btn-ghost justify-center" onClick={() => segnaRientro(aperta)}>
                                               <Undo2 className="w-4 h-4" /> Segna rientro
                                             </button>
-                                            <button type="button" className="btn-ghost" title="Restituito senza percorrerlo: non conta come lavorazione"
+                                            <button type="button" className="btn-ghost justify-center" title="Restituito senza percorrerlo: non conta come lavorazione"
                                               onClick={() => window.confirm(`Il territorio ${t.numero} rientra senza essere stato percorso?`) && segnaRientro(aperta, true)}>
                                               Non percorso
                                             </button>
-                                          </>
+                                          </div>
                                         ) : (
                                           <button
                                             type="button"
@@ -954,11 +965,6 @@ export const TerritoriView: React.FC<TerritoriViewProps> = ({ state, onSaveState
                                               <div className="flex flex-wrap items-center gap-3 mb-4 text-sm">
                                                 <span className="lbl">Cartina PDF</span>
                                                 <span className="text-slate-600">{t.aggiunta ? `caricata dall'app (${t.file})` : 'dal progetto'}</span>
-                                                <label className={`btn-ghost !min-h-0 !py-1 cursor-pointer ${caricando ? 'opacity-50 pointer-events-none' : ''}`}>
-                                                  <Upload className="w-4 h-4" /> {caricando === t.numero ? 'Caricamento…' : 'Sostituisci PDF'}
-                                                  <input type="file" accept="application/pdf" className="sr-only"
-                                                    onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; caricaCartina(t.numero, t.nome, f); }} />
-                                                </label>
                                                 {t.aggiunta && (
                                                   <button type="button" className="btn-ghost !min-h-0 !py-1" onClick={() => rimuoviCartina(t.numero)}>
                                                     {CARTINE_FILE.some(c => c.numero === t.numero) ? 'Torna al PDF originale' : 'Togli dall\'archivio'}

@@ -199,7 +199,7 @@ export const ModernSectionHub: React.FC<ModernSectionHubProps> = ({
       </div>
 
       {(() => {
-        const alert = alertTerritori(normalizeTerritori(state.territori).assegnazioni);
+        const alert = (t => alertTerritori(t.assegnazioni, undefined, t.impostazioni.mesiScadenza))(normalizeTerritori(state.territori));
         if (!alert.length) return null;
         const scaduti = alert.filter(a => a.livello === 'scaduto').length;
         return (
