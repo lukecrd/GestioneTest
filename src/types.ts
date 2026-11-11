@@ -387,6 +387,7 @@ export interface ImpostazioniTerritori {
   mostraDisponibili: number;  // 0 = tutti
   etichettaPredefinita: string; // id etichetta, '' = nessuna
   azzeraStatiAlRientro: boolean; // al rientro gli stati tornano vuoti, tranne quelli permanenti
+  cartellaCartine: string; // id della cartella Drive da cui importare le cartine, '' = nessuna
 }
 
 // Oratori della congregazione che tengono il discorso pubblico in altre congregazioni.

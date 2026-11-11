@@ -5,7 +5,8 @@
 
 const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
 export const ACCOUNT_DRIVE = ((import.meta.env.VITE_DRIVE_ACCOUNT as string | undefined) || '').trim().toLowerCase();
-const SCOPE = 'https://www.googleapis.com/auth/drive.file';
+// drive.readonly in più: per leggere la cartella delle cartine dei territori, che non è stata creata dall'app.
+const SCOPE = 'https://www.googleapis.com/auth/drive.file https://www.googleapis.com/auth/drive.readonly';
 
 export const driveConfigurato = () => !!CLIENT_ID && !!ACCOUNT_DRIVE;
 
@@ -82,6 +83,25 @@ export async function cartellaDrive(token: string, percorso: string[]): Promise<
     padre = (await c.json()).id;
   }
   return padre;
+}
+
+// I PDF dentro una cartella (non nelle sottocartelle), tutte le pagine.
+export async function pdfInCartella(token: string, cartella: string): Promise<{ id: string; name: string; webViewLink: string }[]> {
+  const q = `'${cartella}' in parents and mimeType = 'application/pdf' and trashed = false`;
+  const tutti: { id: string; name: string; webViewLink: string }[] = [];
+  let pagina = '';
+  do {
+    const r = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=nextPageToken,files(id,name,webViewLink)&pageSize=1000&supportsAllDrives=true&includeItemsFromAllDrives=true${pagina && '&pageToken=' + pagina}`, { headers: { Authorization: `Bearer ${token}` } });
+    // 403: token senza la lettura dei file (accesso fatto prima o permesso non concesso): al prossimo clic si richiede
+    if (r.status === 401 || r.status === 403) salvato = null;
+    if (r.status === 403) throw new Error('Drive non permette di leggere la cartella: riprova e, nella finestra di Google, concedi la lettura dei file di Drive.');
+    if (r.status === 404) throw new Error('Cartella non trovata: controlla il link e che sia di un account a cui hai accesso.');
+    if (!r.ok) throw new Error(`Drive non ha letto la cartella (errore ${r.status}).`);
+    const j = await r.json();
+    tutti.push(...(j.files ?? []));
+    pagina = j.nextPageToken ?? '';
+  } while (pagina);
+  return tutti;
 }
 
 // pubblico: "chiunque abbia il link può visualizzare" (i PDF dei programmi collegati dalla tabella, scelta dell'utente).
