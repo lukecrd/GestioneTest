@@ -1009,28 +1009,20 @@ try {
         const dateShort = formatShortDate(item.dateStr);
         const loc = locOf(item.dayOfWeek);
 
-        // Row 1 (Turno 1)
-        rows.push([
-          dateShort,
-          item.location,
-          orarioExcel(orario(loc, 'turno1')),
-          t1Active ? (t1Names || '') : '',
-        ]);
+        // Una riga per turno attivo, come nel foglio di stampa
+        const turni = [
+          ...(t1Active ? [{ key: 'turno1' as const, names: t1Names }] : []),
+          ...(t2Active ? [{ key: 'turno2' as const, names: t2Names }] : []),
+        ];
+        turni.forEach(turno => rows.push([dateShort, item.location, orarioExcel(orario(loc, turno.key)), turno.names]));
 
-        // Row 2 (Turno 2)
-        rows.push([
-          dateShort,
-          item.location,
-          orarioExcel(orario(loc, 'turno2')),
-          t2Active ? (t2Names || '') : '',
-        ]);
+        // Merge Data (A) and Luogo (B) columns across the shift rows
+        if (turni.length === 2) {
+          merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow + 1, c: 0 } });
+          merges.push({ s: { r: currentRow, c: 1 }, e: { r: currentRow + 1, c: 1 } });
+        }
 
-        // Merge Data column (A) for the two rows
-        merges.push({ s: { r: currentRow, c: 0 }, e: { r: currentRow + 1, c: 0 } });
-        // Merge Luogo column (B) for the two rows
-        merges.push({ s: { r: currentRow, c: 1 }, e: { r: currentRow + 1, c: 1 } });
-
-        currentRow += 2;
+        currentRow += turni.length;
       });
     });
 
@@ -3137,31 +3129,36 @@ try {
                         .join(' - ');
 
                       const shortDate = formatShortDate(item.dateStr);
+                      const loc = locOf(item.dayOfWeek);
+                      // Solo i turni attivi della giornata, con gli orari impostati per il luogo.
+                      const turni = [
+                        ...(t1Active ? [{ key: 'turno1' as const, names: t1Names }] : []),
+                        ...(t2Active ? [{ key: 'turno2' as const, names: t2Names }] : []),
+                      ];
+                      if (turni.length === 0) return null;
 
                       return (
                         <React.Fragment key={item.dateStr}>
-                          <tr className="border-b border-black">
-                            <td rowSpan={2} className="p-2 border border-black text-center font-bold align-middle text-black bg-white">
-                              {shortDate}
-                            </td>
-                            <td rowSpan={2} className="p-2 border border-black font-bold align-middle text-black pl-3 bg-white">
-                              {item.location}
-                            </td>
-                            <td className="p-1.5 border border-black text-center font-normal text-black bg-white">
-                              08,00 - 10,00
-                            </td>
-                            <td className="p-1.5 border border-black text-black pl-3 font-normal bg-white">
-                              {t1Active ? (t1Names || '') : ''}
-                            </td>
-                          </tr>
-                          <tr className="border-b border-black">
-                            <td className="p-1.5 border border-black text-center font-normal text-black bg-white">
-                              10,00 - 12,00
-                            </td>
-                            <td className="p-1.5 border border-black text-black pl-3 font-normal bg-white">
-                              {t2Active ? (t2Names || '') : ''}
-                            </td>
-                          </tr>
+                          {turni.map((turno, i) => (
+                            <tr key={turno.key} className="border-b border-black">
+                              {i === 0 && (
+                                <>
+                                  <td rowSpan={turni.length} className="p-2 border border-black text-center font-bold align-middle text-black bg-white">
+                                    {shortDate}
+                                  </td>
+                                  <td rowSpan={turni.length} className="p-2 border border-black font-bold align-middle text-black pl-3 bg-white">
+                                    {item.location}
+                                  </td>
+                                </>
+                              )}
+                              <td className="p-1.5 border border-black text-center font-normal text-black bg-white">
+                                {orarioExcel(orario(loc, turno.key))}
+                              </td>
+                              <td className="p-1.5 border border-black text-black pl-3 font-normal bg-white">
+                                {turno.names}
+                              </td>
+                            </tr>
+                          ))}
                         </React.Fragment>
                       );
                     })}
@@ -3175,13 +3172,13 @@ try {
                     Mercato di Ribolla
                   </td>
                   <td className="p-1.5 border border-black text-center font-normal text-black bg-white">
-                    08,00 - 10,00
+                    {orarioExcel(orario('ribollaMartedi', 'turno1'))}
                   </td>
                   <td className="p-1.5 border border-black text-black pl-3 bg-white"></td>
                 </tr>
                 <tr className="border-b border-black">
                   <td className="p-1.5 border border-black text-center font-normal text-black bg-white">
-                    10,00 - 12,00
+                    {orarioExcel(orario('ribollaMartedi', 'turno2'))}
                   </td>
                   <td className="p-1.5 border border-black text-black pl-3 bg-white"></td>
                 </tr>
@@ -3192,13 +3189,13 @@ try {
                     Mercato di Roccastrada
                   </td>
                   <td className="p-1.5 border border-black text-center font-normal text-black bg-white">
-                    08,00 - 10,00
+                    {orarioExcel(orario('roccastradaMercoledi', 'turno1'))}
                   </td>
                   <td className="p-1.5 border border-black text-black pl-3 bg-white"></td>
                 </tr>
                 <tr className="border-b border-black">
                   <td className="p-1.5 border border-black text-center font-normal text-black bg-white">
-                    10,00 - 12,00
+                    {orarioExcel(orario('roccastradaMercoledi', 'turno2'))}
                   </td>
                   <td className="p-1.5 border border-black text-black pl-3 bg-white"></td>
                 </tr>

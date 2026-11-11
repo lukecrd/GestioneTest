@@ -283,8 +283,8 @@ export default function App({ utente, onEsci }: { utente: AuthUser; onEsci: () =
     const month = overrides.domMonth ?? domMonth;
     const key = domenicaPeriodKey(year, month);
     // Include locally migrated periods that do not yet have a cloud entry.
-    let updates = {
-      ...Object.fromEntries(Object.entries(domProgramsRef.current).filter(([period]) => !domCloudKeys.current.has(period))),
+    let updates: Record<string, DomenicaMonthProgram> = {
+      ...(Object.fromEntries(Object.entries(domProgramsRef.current).filter(([period]) => !domCloudKeys.current.has(period))) as Record<string, DomenicaMonthProgram>),
       ...(overrides.domPrograms || {}),
     };
     if ('domRows' in overrides || 'domTitle' in overrides || 'domWarn' in overrides) {
@@ -299,8 +299,8 @@ export default function App({ utente, onEsci }: { utente: AuthUser; onEsci: () =
     const menY = overrides.menYear ?? menYear;
     const menM = overrides.menMonth ?? menMonth;
     const menKey = domenicaPeriodKey(menY, menM);
-    let menUpdates = {
-      ...Object.fromEntries(Object.entries(menProgramsRef.current).filter(([period]) => !menCloudKeys.current.has(period))),
+    let menUpdates: Record<string, MensileMonthProgram> = {
+      ...(Object.fromEntries(Object.entries(menProgramsRef.current).filter(([period]) => !menCloudKeys.current.has(period))) as Record<string, MensileMonthProgram>),
       ...(overrides.menPrograms || {}),
     };
     if ('menRows' in overrides || 'menTitle' in overrides || 'menWarn' in overrides) {
@@ -725,7 +725,7 @@ export default function App({ utente, onEsci }: { utente: AuthUser; onEsci: () =
   const menRows = menProgram?.rows ?? null;
   const menWarn = menProgram?.warn ?? null;
   const menTitle = menProgram?.title || `Mese di ${MESI[menMonth]} ${menYear}`;
-  const allMensileRows = Object.values(menPrograms).flatMap(program => program.rows || []);
+  const allMensileRows = (Object.values(menPrograms) as MensileMonthProgram[]).flatMap(program => program.rows || []);
 
   const generateMensile = (y: number, m: number) => {
     if (!checkAdminPermission()) return;
@@ -1263,7 +1263,7 @@ try {
   const domTitle = domProgram?.title || `${MESI[domMonth]} ${domYear}`;
   const domenicaProgramRows = weekendDisplayRows(domRows, domTitle);
 
-  const allDomenicaRows = Object.values(domPrograms).flatMap(program => program.rows || []);
+  const allDomenicaRows = (Object.values(domPrograms) as DomenicaMonthProgram[]).flatMap(program => program.rows || []);
   // Stesso nominativo in più ruoli nella stessa settimana, su tutti i programmi.
   const conflittiRuoli = activeTab in PROGRAMMI ? weeklyRoleConflicts(state, { mensileRows: allMensileRows, domenicaRows: allDomenicaRows }) : [];
 
@@ -1308,7 +1308,15 @@ try {
     try {
       const token = await accediDrive(); // prima di tutto: il popup di Google deve partire dal clic
       const mese = `${MESI[meseTabella.m]} ${meseTabella.y}`;
-      const nome = `Tabella Informazioni - ${mese}.pdf`;
+      const nome = '00 - Tabella Informazioni.pdf';
+      // Nomi numerati dei file su Drive (il mese è nel nome della cartella); "mensile" è un PDF solo per incarichi e pulizie.
+      const nomiDrive: Partial<Record<SectionKey, string>> = {
+        vitaEMinistero: '01 - Programma Adunanza Infrasettimanale',
+        domenica: '02 - Programma Adunanza del fine settimana',
+        mensile: '03 - Programma Uscieri - Microfoni - Audio Video - riassetto - pulizie',
+        servizioCampo: '04 - Programma Adunanze per il Servizio di campo',
+        operaPubblica: '05 - Programma Espositori Mobili',
+      };
       // es. novembre 2026 -> "Tabella informazioni Roccastrada/2026 11"
       const cartella = await cartellaDrive(token, ['Tabella informazioni Roccastrada', `${meseTabella.y} ${String(meseTabella.m + 1).padStart(2, '0')}`]);
       const link: Record<string, string> = { zoom: ZOOM.url };
@@ -1320,7 +1328,7 @@ try {
             const foglio = foglioPdf(voce.sezione);
             if (!foglio) continue; // programma del mese non ancora pronto: riquadro senza link
             showToast(`Drive: carico "${voce.titolo}"…`);
-            const titolo = `${voce.titolo} - ${mese}`;
+            const titolo = nomiDrive[voce.sezione] || `${voce.titolo} - ${mese}`;
             perSezione[voce.sezione] = (await caricaSuDrive(token, await creaPdf(foglio, titolo), `${titolo}.pdf`, { pubblico: true, cartella })).webViewLink;
           }
           link[voce.img] = perSezione[voce.sezione]!;
