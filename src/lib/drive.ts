@@ -28,17 +28,26 @@ export function precaricaDrive(): Promise<void> {
   return gis;
 }
 
+// Il token vale circa un'ora: finché è valido non si riapre il popup, che fuori da un clic il browser blocca
+// (es. dopo la scelta del file o un window.confirm).
+let salvato: { token: string; scade: number } | null = null;
+export const driveAccesso = () => !!salvato && Date.now() < salvato.scade;
+
 // Chiede il token (popup di Google) e verifica che l'account scelto sia quello configurato.
 export async function accediDrive(): Promise<string> {
   if (!driveConfigurato()) throw new Error('Salvataggio su Drive non configurato: mancano VITE_GOOGLE_CLIENT_ID o VITE_DRIVE_ACCOUNT.');
+  if (salvato && driveAccesso()) return salvato.token;
   await precaricaDrive();
+  let durata = 3600;
   const token = await new Promise<string>((ok, ko) => {
     window.google.accounts.oauth2.initTokenClient({
       client_id: CLIENT_ID,
       scope: SCOPE,
       hint: ACCOUNT_DRIVE,
-      callback: (r: { access_token?: string; error?: string }) =>
-        r.access_token ? ok(r.access_token) : ko(new Error(`Accesso a Google non riuscito (${r.error || 'sconosciuto'}).`)),
+      callback: (r: { access_token?: string; expires_in?: number | string; error?: string }) => {
+        durata = Number(r.expires_in) || durata;
+        r.access_token ? ok(r.access_token) : ko(new Error(`Accesso a Google non riuscito (${r.error || 'sconosciuto'}).`));
+      },
       error_callback: (e: { type?: string }) =>
         ko(new Error(e?.type === 'popup_closed' ? 'Accesso a Google annullato.' : 'Il browser ha bloccato la finestra di accesso a Google.')),
     }).requestAccessToken();
@@ -49,6 +58,7 @@ export async function accediDrive(): Promise<string> {
     window.google.accounts.oauth2.revoke(token, () => {});
     throw new Error(`Hai scelto ${email || 'un altro account'}: la tabella va salvata su ${ACCOUNT_DRIVE}.`);
   }
+  salvato = { token, scade: Date.now() + (durata - 60) * 1000 };
   return token;
 }
 
@@ -59,6 +69,7 @@ export async function cartellaDrive(token: string, percorso: string[]): Promise<
   for (const nome of percorso) {
     const q = `name = '${nome.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}' and mimeType = 'application/vnd.google-apps.folder' and '${padre}' in parents and trashed = false`;
     const r = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)&pageSize=1`, { headers: { Authorization: `Bearer ${token}` } });
+    if (r.status === 401) salvato = null;
     if (!r.ok) throw new Error(`Drive non ha trovato la cartella "${nome}" (errore ${r.status}).`);
     const trovata = (await r.json()).files?.[0]?.id;
     if (trovata) { padre = trovata; continue; }
@@ -83,6 +94,7 @@ export async function caricaSuDrive(token: string, file: Blob, nome: string, { p
     headers: { Authorization: `Bearer ${token}` },
     body: corpo,
   });
+  if (r.status === 401) salvato = null;
   if (!r.ok) throw new Error(`Drive ha rifiutato il file (errore ${r.status}).`);
   const caricato = await r.json();
   if (pubblico) {

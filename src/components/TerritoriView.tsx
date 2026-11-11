@@ -31,7 +31,7 @@ import {
   applicaRientri,
   riepilogoTerritori,
 } from '../utils/territori';
-import { accediDrive, caricaSuDrive, cartellaDrive, driveConfigurato, precaricaDrive } from '../lib/drive';
+import { accediDrive, caricaSuDrive, cartellaDrive, driveAccesso, driveConfigurato, precaricaDrive } from '../lib/drive';
 import { ModuloS13 } from './ModuloS13';
 import { SchedaTerritorio } from './SchedaTerritorio';
 import { StatisticaTerritori } from './StatisticaTerritori';
@@ -462,6 +462,8 @@ export const TerritoriView: React.FC<TerritoriViewProps> = ({ state, onSaveState
     const form = e.currentTarget;
     const file = (form.elements.namedItem('pdf') as HTMLInputElement).files?.[0];
     const numero = parseNumeriTerritori(nuovaCartina.numero, new Set()).sconosciuti[0] ?? '';
+    // l'accesso a Google prima del confirm: dopo, il clic non vale più e il popup viene bloccato
+    try { await accediDrive(); } catch (err) { onShowToast(err instanceof Error ? err.message : 'Accesso a Google non riuscito.'); return; }
     if (PER_NUMERO.has(numero) && !window.confirm(`Il territorio ${numero} esiste già: sostituire il suo PDF?`)) return;
     if (await caricaCartina(numero, nuovaCartina.nome, file)) {
       setNuovaCartina({ numero: '', nome: '' });
@@ -889,7 +891,14 @@ export const TerritoriView: React.FC<TerritoriViewProps> = ({ state, onSaveState
                                         </a>
                                         {isAdmin && driveConfigurato() && (
                                           <label className={`btn-ghost !min-h-0 !py-1 cursor-pointer ${caricando ? 'opacity-50 pointer-events-none' : ''}`}
-                                            aria-label={`Carica PDF della cartina del territorio ${t.numero}`}>
+                                            aria-label={`Carica PDF della cartina del territorio ${t.numero}`}
+                                            // senza accesso, il primo clic apre solo il popup di Google: dopo la scelta del file verrebbe bloccato
+                                            onClick={e => {
+                                              if (driveAccesso()) return;
+                                              e.preventDefault();
+                                              accediDrive().then(() => onShowToast('Accesso a Google fatto: ora scegli il PDF.'),
+                                                err => onShowToast(err instanceof Error ? err.message : 'Accesso a Google non riuscito.'));
+                                            }}>
                                             <Upload className="w-4 h-4" /> {caricando === t.numero ? 'Caricamento…' : 'Carica PDF'}
                                             <input type="file" accept="application/pdf" className="sr-only"
                                               onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; caricaCartina(t.numero, t.nome, f); }} />
