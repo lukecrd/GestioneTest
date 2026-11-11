@@ -192,6 +192,13 @@ export function cartineDaFile(fileMap) {
   return [...cartine.values()].sort((a, b) => confrontaNumeri(a.numero, b.numero));
 }
 
+// Link (o id) di una cartella Drive -> id: ".../drive/folders/1AbC...?usp=sharing" -> "1AbC...". '' se non si riconosce.
+export function idCartellaDrive(testo) {
+  const t = String(testo ?? '').trim();
+  const id = t.match(/\/folders\/([\w-]+)/)?.[1] ?? t.match(/[?&]id=([\w-]+)/)?.[1] ?? t;
+  return /^[\w-]{10,}$/.test(id) ? id : '';
+}
+
 // Cartina caricata dall'app (PDF su Drive): numero, nome e sezione come se venisse dal nome di un file.
 export function cartinaAggiunta({ numero, nome, link, file }) {
   const info = parseCartina(`territorio_${numero}_${nome}.pdf`);
@@ -260,6 +267,7 @@ export function normalizeTerritori(raw) {
     mostraDisponibili: intero(imp.mostraDisponibili, 0, 500, 0),   // 0 = tutti
     etichettaPredefinita: etichette.some(e => e.id === imp.etichettaPredefinita) ? imp.etichettaPredefinita : '',
     azzeraStatiAlRientro: imp.azzeraStatiAlRientro !== false,
+    cartellaCartine: idCartellaDrive(imp.cartellaCartine),
   };
   const aggiunte = Array.isArray(raw?.aggiunte)
     ? raw.aggiunte

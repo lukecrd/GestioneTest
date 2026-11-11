@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { scadenzaTerritorio, statoScadenza, giorniTra, alertTerritori, statisticheLavorazione, assegnazioneAperta, ultimoRientro, normalizeTerritori, parseCartina, dettaglioInSezione, cartineDaFile, raggruppaSezioni, annoDiServizio, righeS13, pagineS13, anniS13, parseNumeriTerritori, testoSu, copertura, filtraPerEtichette, SENZA_ETICHETTE, CON_ETICHETTE, statisticheMensili, rientratiDiRecente, registraVisita, azzeraStati, unisciCartine, ordinaIndirizzi, statisticaTerritori, erroreRegistrazione, applicaRientri, leggiKml, puntiAnello, importaRegistrazioni, dataExcel, riepilogoTerritori } from '../src/utils/territori.js';
+import { scadenzaTerritorio, statoScadenza, giorniTra, alertTerritori, statisticheLavorazione, assegnazioneAperta, ultimoRientro, normalizeTerritori, parseCartina, dettaglioInSezione, cartineDaFile, raggruppaSezioni, annoDiServizio, righeS13, pagineS13, anniS13, parseNumeriTerritori, testoSu, copertura, filtraPerEtichette, SENZA_ETICHETTE, CON_ETICHETTE, statisticheMensili, rientratiDiRecente, registraVisita, azzeraStati, unisciCartine, ordinaIndirizzi, statisticaTerritori, erroreRegistrazione, applicaRientri, leggiKml, puntiAnello, importaRegistrazioni, dataExcel, idCartellaDrive, riepilogoTerritori } from '../src/utils/territori.js';
 
 test('nome, codice e sezione dal nome del file', () => {
   assert.deepEqual(parseCartina('Territorio_01_Ribolla.pdf'), { numero: '1', nome: 'Ribolla', sezione: 'Ribolla' });
@@ -100,7 +100,7 @@ test('copertura: lavorati negli ultimi 12 mesi, esclusi i rientri non percorsi',
 test('normalize: codici sempre testuali, scarta dati incompleti', () => {
   const n = normalizeTerritori({ assegnazioni: [{ id: 'a', numero: 2, assegnato: '2026-01-01' }, { id: 'b', numero: 3 }] });
   assert.deepEqual(n.assegnazioni.map(a => a.numero), ['2']);
-  assert.deepEqual(normalizeTerritori(undefined), { assegnazioni: [], etichette: [], note: {}, indirizzi: [], impostazioni: { mesiScadenza: 4, maxPerProclamatore: 0, mostraDisponibili: 0, etichettaPredefinita: '', azzeraStatiAlRientro: true }, aggiunte: [], congregazione: null });
+  assert.deepEqual(normalizeTerritori(undefined), { assegnazioni: [], etichette: [], note: {}, indirizzi: [], impostazioni: { mesiScadenza: 4, maxPerProclamatore: 0, mostraDisponibili: 0, etichettaPredefinita: '', azzeraStatiAlRientro: true, cartellaCartine: '' }, aggiunte: [], congregazione: null });
   const e = normalizeTerritori({ etichette: [{ id: 'x', nome: ' Campagna ', colore: 'rosso', territori: [12, '12', '35A'] }, { id: 'y', nome: '' }] }).etichette;
   assert.deepEqual(e, [{ id: 'x', nome: 'Campagna', colore: '#5a6b7a', territori: ['12', '35A'] }]);
 });
@@ -150,7 +150,7 @@ test('S-13: 20 righe per pagina e anni proposti', () => {
 
 test('impostazioni: valori fuori scala tornano ai predefiniti, scadenza configurabile', () => {
   const i = normalizeTerritori({ etichette: [{ id: 'e', nome: 'X' }], impostazioni: { mesiScadenza: 6, maxPerProclamatore: -1, mostraDisponibili: 10, etichettaPredefinita: 'sparita' } }).impostazioni;
-  assert.deepEqual(i, { mesiScadenza: 6, maxPerProclamatore: 0, mostraDisponibili: 10, etichettaPredefinita: '', azzeraStatiAlRientro: true });
+  assert.deepEqual(i, { mesiScadenza: 6, maxPerProclamatore: 0, mostraDisponibili: 10, etichettaPredefinita: '', azzeraStatiAlRientro: true, cartellaCartine: '' });
   assert.equal(scadenzaTerritorio('2026-01-15', 6), '2026-07-15');
   assert.equal(alertTerritori([{ id: 'a', numero: '1', assegnato: '2026-05-01' }], '2026-10-05', 6)[0].livello, 'vicino');
 });
@@ -306,6 +306,18 @@ test('import Excel: formato Hourglass, numeri "01", date seriali, righe scartate
   // aggiungendo di nuovo lo stesso file non si duplica nulla
   const di_nuovo = importaRegistrazioni(righe, validi, r.assegnazioni, 'aggiungi', '2026-11-08');
   assert.deepEqual([di_nuovo.importate, di_nuovo.doppioni], [0, 3]);
+});
+
+test('id della cartella Drive dal link', () => {
+  const id = '1AbCdEfGhIjKlMnOp_q-RsT';
+  assert.equal(idCartellaDrive(`https://drive.google.com/drive/folders/${id}?usp=sharing`), id);
+  assert.equal(idCartellaDrive(`https://drive.google.com/drive/u/0/folders/${id}`), id);
+  assert.equal(idCartellaDrive(`https://drive.google.com/open?id=${id}`), id);
+  assert.equal(idCartellaDrive(` ${id} `), id);
+  assert.equal(idCartellaDrive('https://example.com/x y'), '');
+  assert.equal(idCartellaDrive(''), '');
+  assert.equal(normalizeTerritori({ impostazioni: { cartellaCartine: `https://drive.google.com/drive/folders/${id}` } }).impostazioni.cartellaCartine, id);
+  assert.equal(normalizeTerritori({}).impostazioni.cartellaCartine, '');
 });
 
 test('riepilogo: disponibili + assegnati = territori, la cartina tolta non conta', () => {
