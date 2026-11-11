@@ -28,6 +28,7 @@ import {
   registraVisita,
   unisciCartine,
   cartinaAggiunta,
+  parseCartina,
   ordinaIndirizzi,
   applicaRientri,
 } from '../utils/territori';
@@ -435,7 +436,18 @@ export const TerritoriView: React.FC<TerritoriViewProps> = ({ state, onSaveState
     setVaiA(null);
   }, [vaiA, tab]);
 
-  // Carica il PDF su Drive (link visibile a chi ha il link) e aggiunge o sostituisce la cartina del territorio.
+  // Carica il PDF su Drive (link visibile a chi ha il link): la cartina che aggiunge o sostituisce quella del territorio.
+  const inviaCartina = async (token: string, cartella: string, numero: string, nome: string, file: File): Promise<CartinaAggiunta> => {
+    const { id, webViewLink } = await caricaSuDrive(token, file, `Territorio_${numero}_${nome}.pdf`, { pubblico: true, cartella });
+    return { numero, nome, link: webViewLink, driveId: id, file: file.name, caricato: oggi };
+  };
+  // Dopo l'attesa su Drive si salva sui dati più recenti, in un'unica scrittura.
+  const salvaAggiunte = (nuove: CartinaAggiunta[]) => {
+    const numeri = new Set(nuove.map(a => a.numero));
+    const attuali = dataRef.current;
+    onSaveState({ ...state, territori: { ...attuali, aggiunte: [...attuali.aggiunte.filter(a => !numeri.has(a.numero)), ...nuove] } });
+  };
+
   const caricaCartina = async (numeroScritto: string, nome: string, file: File | undefined) => {
     if (!file || !checkAdminPermission()) return false;
     if (file.type !== 'application/pdf') { onShowToast('Puoi caricare solo file PDF.'); return false; }
@@ -446,10 +458,7 @@ export const TerritoriView: React.FC<TerritoriViewProps> = ({ state, onSaveState
     try {
       const token = await accediDrive();
       const cartella = await cartellaDrive(token, ['Territori']);
-      const { id, webViewLink } = await caricaSuDrive(token, file, `Territorio_${numero}_${nome.trim()}.pdf`, { pubblico: true, cartella });
-      const nuova: CartinaAggiunta = { numero, nome: nome.trim(), link: webViewLink, driveId: id, file: file.name, caricato: oggi };
-      const attuali = dataRef.current;
-      onSaveState({ ...state, territori: { ...attuali, aggiunte: [...attuali.aggiunte.filter(a => a.numero !== numero), nuova] } });
+      salvaAggiunte([await inviaCartina(token, cartella, numero, nome.trim(), file)]);
       onShowToast(`Cartina del territorio ${numero} caricata su Drive.`);
       return true;
     } catch (err) {
@@ -458,6 +467,43 @@ export const TerritoriView: React.FC<TerritoriViewProps> = ({ state, onSaveState
     } finally {
       setCaricando(null);
     }
+  };
+
+  // Più PDF insieme: numero e nome dal nome del file, come per quelli in src/territori/.
+  const caricaTutte = async (files: File[]) => {
+    if (!files.length || !checkAdminPermission()) return;
+    const scelte = new Map<string, { nome: string; file: File }>();
+    const scartati: string[] = [];
+    for (const file of files) {
+      const info = file.type === 'application/pdf' || /\.pdf$/i.test(file.name) ? parseCartina(file.name) : null;
+      if (!info) { scartati.push(file.name); continue; }
+      // senza nome nel file ("12.pdf") resta quello del territorio in archivio
+      const senzaNome = info.nome === `Territorio ${info.numero}`;
+      scelte.set(info.numero, { nome: (senzaNome && PER_NUMERO.get(info.numero)?.nome) || info.nome, file });
+    }
+    if (!scelte.size) { onShowToast(`Nessun file riconosciuto: il nome deve contenere il numero, es. territorio_12_Ribolla.pdf.`); return; }
+    const sostituite = [...scelte.keys()].filter(n => PER_NUMERO.has(n)).length;
+    if (!window.confirm(`Caricare ${scelte.size} ${scelte.size === 1 ? 'cartina' : 'cartine'} su Drive?`
+      + (sostituite ? ` ${sostituite} ${sostituite === 1 ? 'sostituisce quella' : 'sostituiscono quelle'} già in archivio.` : '')
+      + (scartati.length ? `\n\nSaltati (numero non trovato nel nome): ${scartati.join(', ')}` : ''))) return;
+    const nuove: CartinaAggiunta[] = [];
+    const falliti: string[] = [];
+    try {
+      const token = await accediDrive();
+      const cartella = await cartellaDrive(token, ['Territori']);
+      for (const [numero, { nome, file }] of scelte) {
+        setCaricando(`${nuove.length + falliti.length + 1}/${scelte.size}`);
+        try { nuove.push(await inviaCartina(token, cartella, numero, nome, file)); } catch { falliti.push(numero); }
+      }
+    } catch (err) {
+      onShowToast(err instanceof Error ? err.message : 'Caricamento non riuscito.');
+    } finally {
+      // salva anche un caricamento a metà: i PDF già su Drive non vanno persi
+      if (nuove.length) salvaAggiunte(nuove);
+      setCaricando(null);
+    }
+    if (nuove.length) onShowToast(`${nuove.length} ${nuove.length === 1 ? 'cartina caricata' : 'cartine caricate'} su Drive.`
+      + (falliti.length ? ` Non riuscite: ${falliti.join(', ')}.` : ''));
   };
 
   const aggiungiCartina = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -801,6 +847,21 @@ export const TerritoriView: React.FC<TerritoriViewProps> = ({ state, onSaveState
                     <Upload className="w-4 h-4" /> {caricando ? 'Caricamento…' : 'Carica su Drive e aggiungi'}
                   </button>
                 </form>
+                <div className="mt-4">
+                  <label className={`btn-ghost cursor-pointer ${caricando ? 'opacity-50 pointer-events-none' : ''}`}
+                    // come per "Carica PDF": senza accesso il primo clic apre solo il popup di Google
+                    onClick={e => {
+                      if (driveAccesso()) return;
+                      e.preventDefault();
+                      accediDrive().then(() => onShowToast('Accesso a Google fatto: ora scegli i PDF.'),
+                        err => onShowToast(err instanceof Error ? err.message : 'Accesso a Google non riuscito.'));
+                    }}>
+                    <Upload className="w-4 h-4" /> {caricando?.includes('/') ? `Caricamento ${caricando}…` : 'Carica più PDF insieme'}
+                    <input type="file" accept="application/pdf" multiple className="sr-only"
+                      onChange={e => { const f = [...(e.target.files ?? [])]; e.target.value = ''; caricaTutte(f); }} />
+                  </label>
+                  <p className="text-xs text-slate-500 mt-1">Numero e nome si leggono dal nome di ogni file, es. <code>territorio_12_Ribolla.pdf</code> o <code>12.pdf</code>.</p>
+                </div>
                 <p className="text-xs text-slate-500 mt-2">
                   La sezione si ricava dal nome, come per i file: "Commerciale …" e "… Rurale …" hanno la loro sezione, gli altri quella del paese.
                   Il PDF va nella cartella "Territori" del Drive della congregazione, visibile a chi ha il link.
