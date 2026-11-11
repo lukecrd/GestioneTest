@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { scadenzaTerritorio, statoScadenza, giorniTra, alertTerritori, statisticheLavorazione, assegnazioneAperta, ultimoRientro, normalizeTerritori, parseCartina, dettaglioInSezione, cartineDaFile, raggruppaSezioni, annoDiServizio, righeS13, pagineS13, anniS13, parseNumeriTerritori, testoSu, copertura, filtraPerEtichette, SENZA_ETICHETTE, CON_ETICHETTE, statisticheMensili, rientratiDiRecente, registraVisita, azzeraStati, unisciCartine, ordinaIndirizzi, statisticaTerritori, erroreRegistrazione, applicaRientri, leggiKml, puntiAnello, importaRegistrazioni, dataExcel, idCartellaDrive } from '../src/utils/territori.js';
+import { scadenzaTerritorio, statoScadenza, giorniTra, alertTerritori, statisticheLavorazione, assegnazioneAperta, ultimoRientro, normalizeTerritori, parseCartina, dettaglioInSezione, cartineDaFile, raggruppaSezioni, annoDiServizio, righeS13, pagineS13, anniS13, parseNumeriTerritori, testoSu, copertura, filtraPerEtichette, SENZA_ETICHETTE, CON_ETICHETTE, statisticheMensili, rientratiDiRecente, registraVisita, azzeraStati, unisciCartine, ordinaIndirizzi, statisticaTerritori, erroreRegistrazione, applicaRientri, leggiKml, puntiAnello, importaRegistrazioni, dataExcel, idCartellaDrive, riepilogoTerritori } from '../src/utils/territori.js';
 
 test('nome, codice e sezione dal nome del file', () => {
   assert.deepEqual(parseCartina('Territorio_01_Ribolla.pdf'), { numero: '1', nome: 'Ribolla', sezione: 'Ribolla' });
@@ -318,4 +318,19 @@ test('id della cartella Drive dal link', () => {
   assert.equal(idCartellaDrive(''), '');
   assert.equal(normalizeTerritori({ impostazioni: { cartellaCartine: `https://drive.google.com/drive/folders/${id}` } }).impostazioni.cartellaCartine, id);
   assert.equal(normalizeTerritori({}).impostazioni.cartellaCartine, '');
+});
+
+test('riepilogo: disponibili + assegnati = territori, la cartina tolta non conta', () => {
+  const ass = [
+    { id: 'a', numero: '1', assegnato: '2026-01-01' },                        // scaduto
+    { id: 'b', numero: '2', assegnato: '2026-10-01' },                        // regolare
+    { id: 'c', numero: '3', assegnato: '2026-01-01', rientro: '2026-02-01' }, // rientrato
+    { id: 'd', numero: '99', assegnato: '2026-01-01' },                       // cartina tolta mentre era fuori
+  ];
+  const r = riepilogoTerritori(ass, new Set(['1', '2', '3', '4']), '2026-11-10', 4);
+  assert.deepEqual(r.aperte.map(a => a.id), ['a', 'b']);
+  assert.equal(r.disponibili, 2);
+  assert.equal(r.disponibili + r.aperte.length, 4);
+  assert.equal(r.scaduti, 1);
+  assert.equal(r.inScadenza, 0);
 });

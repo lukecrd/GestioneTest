@@ -7,7 +7,6 @@ import {
   formatDay,
   giorniTra,
   statoScadenza,
-  alertTerritori,
   statisticheLavorazione,
   assegnazioneAperta,
   ultimoRientro,
@@ -32,6 +31,7 @@ import {
   idCartellaDrive,
   ordinaIndirizzi,
   applicaRientri,
+  riepilogoTerritori,
 } from '../utils/territori';
 import { accediDrive, caricaSuDrive, cartellaDrive, driveAccesso, driveConfigurato, pdfInCartella, precaricaDrive } from '../lib/drive';
 import { ModuloS13 } from './ModuloS13';
@@ -223,10 +223,7 @@ export const TerritoriView: React.FC<TerritoriViewProps> = ({ state, onSaveState
 
   const save = (next: TerritoriData) => onSaveState({ ...state, territori: next });
 
-  const aperte = assegnazioni.filter(a => !a.rientro);
-  const disponibili = territori.length - territori.filter(t => assegnazioneAperta(assegnazioni, t.numero)).length;
-  const alert = useMemo(() => alertTerritori(assegnazioni, oggi, mesi), [assegnazioni, oggi, mesi]);
-  const scaduti = alert.filter(a => a.livello === 'scaduto').length;
+  const { aperte, disponibili, alert, scaduti, inScadenza } = riepilogoTerritori(assegnazioni, new Set(PER_NUMERO.keys()), oggi, mesi);
   const lavorazione = useMemo(() => statisticheLavorazione(assegnazioni, mesi), [assegnazioni, mesi]);
   const proclamatori = useMemo(
     () => Array.from(new Set<string>(state.people.map(p => p.name))).sort((a, b) => a.localeCompare(b, 'it')),
@@ -688,7 +685,7 @@ export const TerritoriView: React.FC<TerritoriViewProps> = ({ state, onSaveState
         {[
           { label: 'Disponibili', value: disponibili },
           { label: 'Assegnati', value: aperte.length },
-          { label: 'In scadenza entro 30 giorni', value: alert.length - scaduti },
+          { label: 'In scadenza entro 30 giorni', value: inScadenza },
           { label: 'Scaduti', value: scaduti },
         ].map(m => (
           <div key={m.label} className="metric-card compact">

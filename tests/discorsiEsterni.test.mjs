@@ -9,13 +9,14 @@ const uscite = [
   { id: 'd', data: '2026-10-13', oratore: 'Luca Bianchi', titolo: 'Vero aiuto per la famiglia', congregazione: 'Massa Marittima' },
 ];
 
-test('normalize scarta voci incomplete e schemi doppi', () => {
+test('normalize scarta voci senza data o oratore e schemi doppi; schema e congregazione sono facoltativi', () => {
   const n = normalizeDiscorsiEsterni({
     oratori: [{ nome: 'Mario Rossi', schemi: ['A', 'A', 'B', 3] }, { nome: '  ' }],
-    uscite: [...uscite, { id: 'x', data: '2026-01-01', oratore: 'Mario Rossi' }],
+    uscite: [...uscite, { id: 'x', data: '2026-01-01', oratore: 'Mario Rossi' }, { id: 'y', data: '2026-01-02' }],
   });
   assert.deepEqual(n.oratori.map(o => [o.nome, o.schemi]), [['Mario Rossi', ['A', 'B']]]);
-  assert.equal(n.uscite.length, 4);
+  assert.equal(n.uscite.length, 5);
+  assert.deepEqual(n.uscite[4], { id: 'x', data: '2026-01-01', oratore: 'Mario Rossi', titolo: '', congregazione: '' });
   assert.deepEqual(normalizeDiscorsiEsterni(undefined), { oratori: [], uscite: [] });
 });
 

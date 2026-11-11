@@ -14,13 +14,13 @@ const giornoSettimana = (data: string) => GIORNI_ESTESI[(new Date(data + 'T12:00
 const Uscita: React.FC<{ u: UscitaDiscorso }> = ({ u }) => {
   const numero = numeroSchema(u.titolo);
   return (
-    <div className="rounded-md border-l-[3px] border-[var(--accent)] bg-[var(--accent-soft)] px-2 py-1.5 text-xs leading-snug" title={`${u.orario || "Senza orario"}, ${u.congregazione}, ${u.oratore}
+    <div className="rounded-md border-l-[3px] border-[var(--accent)] bg-[var(--accent-soft)] px-2 py-1.5 text-xs leading-snug" title={`${u.orario || "Senza orario"}, ${u.congregazione || "congregazione da definire"}, ${u.oratore}
 ${numero ? "n. " + numero + " " : ""}${u.titolo}`}>
       <div className="flex justify-between gap-2 font-bold tabular-nums text-slate-900">
         <span className="whitespace-nowrap">{u.orario || <span className="font-normal italic text-slate-500">senza orario</span>}</span>
         {numero && <span className="whitespace-nowrap">n. {numero}</span>}
       </div>
-      <div className="font-semibold text-slate-800 truncate">{u.congregazione}</div>
+      <div className="font-semibold text-slate-800 truncate">{u.congregazione || <span className="font-normal italic text-slate-500">da definire</span>}</div>
       <div className="text-slate-600 truncate">{u.oratore}</div>
     </div>
   );
