@@ -103,7 +103,9 @@ test('VM does not duplicate a person across roles or duplicate linked profiles',
   const roles = { tesoriLettura: true, presidente: true, preghiera: true };
   const p = [participant('first', roles, 'p'), participant('duplicate', roles, 'p')];
   const result = generate(p, [meeting('m', '2026-10-07')], { people: [person('p', 'Same')] });
-  assert.equal(vitaAssignmentIds(result.meetings[0]).length, 1);
+  const m = result.meetings[0];
+  assert.deepEqual([m.presidenteId, m.tesoriLetturaReaderId].filter(Boolean).length, 1);
+  assert.deepEqual([m.preghieraInizialeId, m.preghieraFinaleId].filter(Boolean).length, 1);
   assert.ok(result.warnings.length > 0);
 });
 
@@ -390,4 +392,22 @@ test('prayers rotate: whoever has gone longest without praying goes first, acros
   const people = ['A', 'C', 'E', 'F'].map(pray);
   const stats = computeVitaStats(people, [...history, meeting('h4', '2026-09-30', { tesoriLetturaReaderId: 'A' })]);
   assert.deepEqual(people.sort((a, b) => compareParticipantsByLastAssignmentAsc(a, b, stats, 'preghiera')).map(p => p.id), ['F', 'A', 'C', 'E']);
+});
+
+test('Tesori talks: own rotation, never the same person in consecutive weeks, one part per meeting', () => {
+  const t = id => participant(id, { tesoriDiscorso: true, tesoriGemme: true, preghiera: true });
+  const history = [meeting('h1', '2026-09-30', { tesori1Title: 'x', tesori1SpeakerId: 'A', tesoriGemmeSpeakerId: 'B', preghieraInizialeId: 'C' })];
+  const targets = ['2026-10-07', '2026-10-14', '2026-10-21'].map((d, i) => meeting('t' + i, d, { tesori1Title: 'x' }));
+  const { meetings, warnings } = generate(['A', 'B', 'C', 'D'].map(t), [...history, ...targets]);
+  const tesori = m => [m.tesori1SpeakerId, m.tesoriGemmeSpeakerId];
+  const all = meetings.sort((a, b) => a.dateStr.localeCompare(b.dateStr));
+  for (let i = 1; i < all.length; i++) {
+    assert.deepEqual(tesori(all[i]).filter(id => tesori(all[i - 1]).includes(id)), [], all[i].dateStr);
+    assert.notEqual(all[i].tesori1SpeakerId, all[i].tesoriGemmeSpeakerId, all[i].dateStr);
+  }
+  assert.deepEqual(warnings.filter(w => w.includes('Tesori')), []);
+  // Only one eligible: assigned anyway, but flagged.
+  const solo = generate([t('A')], [meeting('h', '2026-09-30', { tesoriGemmeSpeakerId: 'A' }), meeting('t', '2026-10-07')]);
+  assert.equal(solo.meetings.find(m => m.id === 't').tesoriGemmeSpeakerId, 'A');
+  assert.ok(solo.warnings.some(w => w.includes('settimana vicina')));
 });

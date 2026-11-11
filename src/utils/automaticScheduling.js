@@ -130,7 +130,8 @@ export function weeklyRoleConflicts(state, programs = {}) {
   const groups = new Map();
   for (const entry of createSchedulingLedger(state, programs).entries) {
     const week = weekKey(entry.date);
-    if (!week) continue;
+    // Prayers do not count as a second role (see generateVitaAssignments).
+    if (!week || entry.role.startsWith('Preghiera')) continue;
     const id = week + '|' + entry.key;
     const group = groups.get(id) || { week, name: entry.name, roles: new Map() };
     group.roles.set(entry.program + '|' + entry.role, { program: entry.program, role: entry.role });
@@ -177,6 +178,9 @@ export function vitaMonthlyRepeats(meetings, participants) {
     }));
   return warnings;
 }
+
+// Tesori talks rotate on their own and never go to the same person in consecutive weeks.
+const TESORI_ROLES = ['tesoriDiscorso', 'tesoriGemme'];
 
 const isBisogniLocali = part => /bisogni\s+locali/i.test(part.title || '');
 
@@ -259,31 +263,38 @@ export function generateVitaAssignments(state, data, year, month, programs = {})
     const stats = new Map();
     for (const assignment of history) {
       if (assignment.date >= m.dateStr) continue;
-      const current = stats.get(assignment.key) || { last: '', count: 0, roles: new Map() };
+      const current = stats.get(assignment.key) || { last: '', count: 0, roles: new Map(), counts: new Map() };
       if (current.last < assignment.date) current.last = assignment.date;
       if ((current.roles.get(assignment.role) || '') < assignment.date) current.roles.set(assignment.role, assignment.date);
       current.count++;
+      current.counts.set(assignment.role, (current.counts.get(assignment.role) || 0) + 1);
       stats.set(assignment.key, current);
     }
-    const empty = { last: '', count: 0, roles: new Map() };
+    const empty = { last: '', count: 0, roles: new Map(), counts: new Map() };
     const compareFor = role => (a, b) => {
       const sa = stats.get(ledger.identity(a)) || empty;
       const sb = stats.get(ledger.identity(b)) || empty;
       return (sa.roles.get(role) || '').localeCompare(sb.roles.get(role) || '') ||
-        sa.last.localeCompare(sb.last) || sa.count - sb.count || a.name.localeCompare(b.name, 'it');
+        (TESORI_ROLES.includes(role) ? (sa.counts.get(role) || 0) - (sb.counts.get(role) || 0)
+          : sa.last.localeCompare(sb.last) || sa.count - sb.count) || a.name.localeCompare(b.name, 'it');
     };
     if (!m.tesori1Title) m.tesori1SpeakerId = '';
     // Uscieri of the same evening (monthly programme, midweek date): not presidente too.
     const evening = weeklyDates(m.dateStr)[0];
     const uscieri = new Set(ledger.entries.filter(e => e.program === 'mensile' && e.date === evening && e.role.startsWith('Usciere')).map(e => e.key));
-    const avoid = (id, p) => (usedThisMonth[id]?.has(ledger.identity(p)) ? 1 : 0) + (id === 'presidente' && uscieri.has(ledger.identity(p)) ? 2 : 0);
+    // Tesori talk in the week before or after (already assigned): last resort only.
+    const week = new Date(weekKey(m.dateStr) + 'T12:00:00');
+    const nearWeeks = new Set([-7, 7].map(days => dateKey(new Date(week.getTime() + days * 864e5))));
+    const tesoriNear = new Set(history.filter(h => TESORI_ROLES.includes(h.role) && nearWeeks.has(weekKey(h.date))).map(h => h.key));
+    const avoid = (id, role, p) => (usedThisMonth[id]?.has(ledger.identity(p)) ? 1 : 0) + (id === 'presidente' && uscieri.has(ledger.identity(p)) ? 2 : 0) +
+      (TESORI_ROLES.includes(role) && tesoriNear.has(ledger.identity(p)) ? 4 : 0);
     const tasks = [];
     const addTask = (id, label, role, set, gender, partTypes) => {
       tasks.push({ id, label, role, set, candidates: (data.participants || []).filter(p =>
         p.roles?.[role] && (!gender || p.gender === gender) &&
         (!partTypes || isParticipantEligibleForPartTypes(p.roles, partTypes)) &&
         !ledger.isBusy(p, m.dateStr) && !ledger.isUnavailable(p, m.dateStr)).sort((a, b) =>
-        avoid(id, a) - avoid(id, b) || compareFor(role)(a, b)) });
+        avoid(id, role, a) - avoid(id, role, b) || compareFor(role)(a, b)) });
     };
     addTask('presidente', 'Presidente', 'presidente', p => { m.presidenteId = p; }, 'M');
     addTask('iniziale', 'Preghiera iniziale', 'preghiera', p => { m.preghieraInizialeId = p; }, 'M');
@@ -313,13 +324,18 @@ export function generateVitaAssignments(state, data, year, month, programs = {})
       addTask('studio-lettore', 'Studio biblico: lettore', 'studioBiblicoLettore', p => { m.studioBiblicoReaderId = p; }, 'M');
     }
     addTask('finale', 'Preghiera finale', 'preghiera', p => { m.preghieraFinaleId = p; }, 'M');
-    const assigned = assignUniqueSlots(tasks, ledger.identity);
+    // One part per person per meeting; prayers are matched apart, so a speaker may also pray.
+    const isPrayer = task => task.role === 'preghiera';
+    const assigned = new Map([...assignUniqueSlots(tasks.filter(t => !isPrayer(t)), ledger.identity),
+      ...assignUniqueSlots(tasks.filter(isPrayer), ledger.identity)]);
     for (const task of tasks) {
       const person = assigned.get(task.id);
       task.set(person?.id || '');
       if (person) {
         ledger.reserve(person, m.dateStr);
         history.push({ key: ledger.identity(person), role: task.role, date: m.dateStr });
+        if (TESORI_ROLES.includes(task.role) && tesoriNear.has(ledger.identity(person)))
+          warnings.push(m.dateStr + ': ' + person.name + ' ha ' + task.label + ' e una parte dei Tesori anche nella settimana vicina (nessun altro libero).');
       } else warnings.push(m.dateStr + ': ' + task.label + ' da assegnare (nessun nominativo idoneo libero).');
     }
     const president = byId.get(m.presidenteId);
