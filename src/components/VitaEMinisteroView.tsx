@@ -1,4 +1,4 @@
-import { generateVitaAssignments, vitaMonthlyRepeats, vitaMeetingDuplicates, isBisogniLocali, isCosaDireste, isAnziano, isAnzianoOServitore } from '../utils/automaticScheduling';
+import { generateVitaAssignments, vitaMonthlyRepeats, vitaMeetingDuplicates, vitaAssignmentIds, isBisogniLocali, isCosaDireste, isAnziano, isAnzianoOServitore } from '../utils/automaticScheduling';
 import { fetchWolJson } from '../utils/wolApi';
 import React, { useState } from 'react';
 import {
@@ -90,6 +90,7 @@ export function VitaEMinisteroView({
 
   const [generationWarnings, setGenerationWarnings] = useState<string[]>([]);
   const [duplicateError, setDuplicateError] = useState('');
+  const [lastAssignmentPopup, setLastAssignmentPopup] = useState<{ name: string; lines: string[] } | null>(null);
 
   // WOL sync modal state
   const [isWolModalOpen, setIsWolModalOpen] = useState<boolean>(false);
@@ -432,6 +433,17 @@ export function VitaEMinisteroView({
       }
     }
     setDuplicateError('');
+    if (current) {
+      // Newly chosen brothers: show their last assignment before this meeting.
+      const before = new Set(vitaAssignmentIds(current));
+      const chosen = vitaAssignmentIds({ ...current, ...updatedFields }).filter(pid => !before.has(pid));
+      const lines = [...new Set(chosen)].map(pid => {
+        const last = statsMap.get(pid)?.assignments.find(a => a.meetingId !== id && a.dateStr < (current.dateStr || ''));
+        const name = getParticipantName(pid);
+        return last ? `${name}: ${last.dateLabel} — ${last.roleLabel}${last.partTitle && last.partTitle !== last.roleLabel ? ` (${last.partTitle})` : ''}` : `${name}: mai assegnato prima`;
+      });
+      if (lines.length) setLastAssignmentPopup({ name: 'Ultima assegnazione', lines });
+    }
     const updated = meetings.map(m => (m.id === id ? { ...m, ...updatedFields } : m));
     handleUpdateMeetings(updated);
   };
@@ -853,6 +865,16 @@ export function VitaEMinisteroView({
               )}
             </div>
           </div>
+
+          {lastAssignmentPopup && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4 no-print" onClick={() => setLastAssignmentPopup(null)} onKeyDown={e => { if (e.key === 'Escape') setLastAssignmentPopup(null); }}>
+              <div role="dialog" aria-modal="true" aria-labelledby="last-assignment-title" className="card max-w-sm w-full text-sm" onClick={e => e.stopPropagation()}>
+                <p id="last-assignment-title" className="font-bold mb-2">{lastAssignmentPopup.name}</p>
+                <ul className="space-y-1 mb-4">{lastAssignmentPopup.lines.map((line, i) => <li key={i}>{line}</li>)}</ul>
+                <button autoFocus className="btn-primary w-full" onClick={() => setLastAssignmentPopup(null)}>OK</button>
+              </div>
+            </div>
+          )}
 
           {(duplicateError || meetingDuplicates.length > 0) && (
             <div className="card no-print border-red-400 bg-red-50 text-red-800 dark:bg-red-950/40 dark:text-red-200 text-xs" role="alert">
