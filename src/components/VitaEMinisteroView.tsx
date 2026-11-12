@@ -1,4 +1,4 @@
-import { generateVitaAssignments, vitaMonthlyRepeats } from '../utils/automaticScheduling';
+import { generateVitaAssignments, vitaMonthlyRepeats, vitaMeetingDuplicates, isBisogniLocali, isCosaDireste, isAnziano, isAnzianoOServitore } from '../utils/automaticScheduling';
 import { fetchWolJson } from '../utils/wolApi';
 import React, { useState } from 'react';
 import {
@@ -89,6 +89,7 @@ export function VitaEMinisteroView({
   const [activeSubTab, setActiveSubTab] = useState<'programma' | 'nominativi' | 'statistiche' | 'stampa'>(stampa ? 'stampa' : 'programma');
 
   const [generationWarnings, setGenerationWarnings] = useState<string[]>([]);
+  const [duplicateError, setDuplicateError] = useState('');
 
   // WOL sync modal state
   const [isWolModalOpen, setIsWolModalOpen] = useState<boolean>(false);
@@ -214,6 +215,7 @@ export function VitaEMinisteroView({
     return true;
   });
   const monthlyRepeats = vitaMonthlyRepeats(meetingsInMonth, participants);
+  const meetingDuplicates = meetingsInMonth.flatMap(m => vitaMeetingDuplicates(m, participants).map(name => `${m.dateLabel || m.dateStr}: ${name} ha più di una parte.`));
 
   const handleAutoGenerate = () => {
     if (!checkAdminPermission()) return;
@@ -419,6 +421,17 @@ export function VitaEMinisteroView({
 
   const handleUpdateSingleMeeting = (id: string, updatedFields: Partial<VitaEMinisteroMeeting>) => {
     if (!isAdmin) return;
+    const current = meetings.find(m => m.id === id);
+    if (current) {
+      // Same brother twice in one meeting (prayers aside): refuse only a newly created repeat.
+      const before = new Set(vitaMeetingDuplicates(current, participants));
+      const added = vitaMeetingDuplicates({ ...current, ...updatedFields }, participants).filter(name => !before.has(name));
+      if (added.length) {
+        setDuplicateError(`${current.dateLabel || current.dateStr}: ${added.join(', ')} ha già un'altra parte in questa adunanza.`);
+        return;
+      }
+    }
+    setDuplicateError('');
     const updated = meetings.map(m => (m.id === id ? { ...m, ...updatedFields } : m));
     handleUpdateMeetings(updated);
   };
@@ -632,12 +645,14 @@ export function VitaEMinisteroView({
     currentSelectedId?: string,
     filterGender?: 'M' | 'F',
     requiredPartTypeIds?: string[],
-    onlyEligible = false
+    onlyEligible = false,
+    pool?: (p: VitaEMinisteroParticipant) => boolean // replaces the role check and lists only these
   ) => {
     const role = roleKey as VitaRoleCategory | undefined; // le chiavi dei ruoli sono le stesse delle categorie
     const eligible = participants
       .filter(p => {
         const matchGender = !filterGender || p.gender === filterGender;
+        if (pool) return matchGender && pool(p);
         const matchRole = !roleKey || !!p.roles[roleKey];
         const matchPartType = !requiredPartTypeIds || isParticipantEligibleForPartTypes(p.roles, requiredPartTypeIds);
         return matchGender && matchRole && matchPartType;
@@ -671,7 +686,7 @@ export function VitaEMinisteroView({
             ))}
           </optgroup>
         )}
-        {!onlyEligible && others.length > 0 && (
+        {!onlyEligible && !pool && others.length > 0 && (
           <optgroup label="Altri nominativi (non specificamente abilitati)">
             {others.map(p => (
               <option key={p.id} value={p.id}>
@@ -838,6 +853,13 @@ export function VitaEMinisteroView({
               )}
             </div>
           </div>
+
+          {(duplicateError || meetingDuplicates.length > 0) && (
+            <div className="card no-print border-red-400 bg-red-50 text-red-800 dark:bg-red-950/40 dark:text-red-200 text-xs" role="alert">
+              <p className="font-bold mb-2">Stesso fratello con più parti nella stessa adunanza</p>
+              <ul className="list-disc pl-4 space-y-1">{[duplicateError, ...meetingDuplicates].filter(Boolean).map((w, i) => <li key={i}>{w}</li>)}</ul>
+            </div>
+          )}
 
           {monthlyRepeats.length > 0 && (
             <div className="card no-print border-amber-300 bg-amber-50 dark:bg-amber-950/30 text-xs" role="alert">
@@ -1038,7 +1060,7 @@ export function VitaEMinisteroView({
                           onChange={e => handleUpdateSingleMeeting(meeting.id, { preghieraInizialeId: e.target.value })}
                           className="inp text-xs py-1"
                         >
-                          {renderParticipantOptions('preghiera', meeting.preghieraInizialeId, 'M')}
+                          {renderParticipantOptions('preghiera', meeting.preghieraInizialeId, 'M', undefined, true)}
                         </select>
                       </div>
                     </div>
@@ -1272,12 +1294,12 @@ export function VitaEMinisteroView({
                                   value={part.studentId || ''}
                                   onChange={e => {
                                     const updatedParts = [...meeting.ministeroParts];
-                                    updatedParts[pIdx].studentId = e.target.value;
+                                    updatedParts[pIdx] = { ...part, studentId: e.target.value };
                                     handleUpdateSingleMeeting(meeting.id, { ministeroParts: updatedParts });
                                   }}
                                   className="inp text-xs py-1"
                                 >
-                                  {renderParticipantOptions('ministeroStudente', part.studentId, undefined, part.partTypeIds, !part.hasAssistant)}
+                                  {renderParticipantOptions('ministeroStudente', part.studentId, undefined, part.partTypeIds, !part.hasAssistant, isCosaDireste(part) ? isAnzianoOServitore : undefined)}
                                 </select>
                               </div>
 
@@ -1320,7 +1342,7 @@ export function VitaEMinisteroView({
                                     value={part.assistantId || ''}
                                     onChange={e => {
                                       const updatedParts = [...meeting.ministeroParts];
-                                      updatedParts[pIdx].assistantId = e.target.value;
+                                      updatedParts[pIdx] = { ...part, assistantId: e.target.value };
                                       handleUpdateSingleMeeting(meeting.id, { ministeroParts: updatedParts });
                                     }}
                                     className="inp text-xs py-1"
@@ -1574,12 +1596,12 @@ export function VitaEMinisteroView({
                                 value={vp.speakerId || ''}
                                 onChange={e => {
                                   const updated = [...meeting.vitaCristianaParts];
-                                  updated[vIdx].speakerId = e.target.value;
+                                  updated[vIdx] = { ...vp, speakerId: e.target.value };
                                   handleUpdateSingleMeeting(meeting.id, { vitaCristianaParts: updated });
                                 }}
                                 className="inp text-xs py-1"
                               >
-                                {renderParticipantOptions('vitaCristianaParti', vp.speakerId, 'M')}
+                                {renderParticipantOptions('vitaCristianaParti', vp.speakerId, 'M', undefined, false, isBisogniLocali(vp) ? isAnziano : undefined)}
                               </select>
                             </div>
 
@@ -1681,7 +1703,7 @@ export function VitaEMinisteroView({
                               onChange={e => handleUpdateSingleMeeting(meeting.id, { preghieraFinaleId: e.target.value })}
                               className="inp text-xs py-1"
                             >
-                              {renderParticipantOptions('preghiera', meeting.preghieraFinaleId, 'M')}
+                              {renderParticipantOptions('preghiera', meeting.preghieraFinaleId, 'M', undefined, true)}
                             </select>
                           </div>
                         </div>

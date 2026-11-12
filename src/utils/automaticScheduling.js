@@ -182,7 +182,22 @@ export function vitaMonthlyRepeats(meetings, participants) {
 // Tesori talks rotate on their own and never go to the same person in consecutive weeks.
 const TESORI_ROLES = ['tesoriDiscorso', 'tesoriGemme'];
 
-const isBisogniLocali = part => /bisogni\s+locali/i.test(part.title || '');
+export const isBisogniLocali = part => /bisogni\s+locali/i.test(part.title || '');
+export const isCosaDireste = part => /cosa\s+direste/i.test(part.title || '');
+
+// shortcut: names hardcoded here; move to a field in Partecipanti if the lists change often.
+const ANZIANI = new Set(['Luca Cardelli', 'Fabio Livieri', 'Alessandro Abate', 'Giuseppe Facchi', 'Francesco Ramezzana'].map(personNameKey));
+const SERVITORI = new Set(['Jacopo Pastorelli', 'Davide Vallini', 'Michele Verzeletti', 'Tonino Beniamini', 'Massimo Trabalza', 'Christian Battisti'].map(personNameKey));
+export const isAnziano = p => ANZIANI.has(personNameKey(p?.name || ''));
+export const isAnzianoOServitore = p => isAnziano(p) || SERVITORI.has(personNameKey(p?.name || ''));
+
+/** Names holding two or more parts in one meeting; prayers do not count. */
+export function vitaMeetingDuplicates(meeting, participants) {
+  const names = new Map((participants || []).map(p => [p.id, p.name]));
+  const counts = new Map();
+  vitaAssignments(meeting).filter(([, , role]) => role !== 'preghiera').forEach(([id]) => counts.set(id, (counts.get(id) || 0) + 1));
+  return [...counts].filter(([, n]) => n > 1).map(([id]) => names.get(id) || id);
+}
 
 /** Fill scarce roles first; relocate a previous choice only to fill a blocked role. */
 export function assignUniqueSlots(tasks, identity) {
@@ -289,10 +304,11 @@ export function generateVitaAssignments(state, data, year, month, programs = {})
     const avoid = (id, role, p) => (usedThisMonth[id]?.has(ledger.identity(p)) ? 1 : 0) + (id === 'presidente' && uscieri.has(ledger.identity(p)) ? 2 : 0) +
       (TESORI_ROLES.includes(role) && tesoriNear.has(ledger.identity(p)) ? 4 : 0);
     const tasks = [];
-    const addTask = (id, label, role, set, gender, partTypes) => {
+    // pool, when given, replaces the role flag and part-type check (e.g. elders only).
+    const addTask = (id, label, role, set, gender, partTypes, pool) => {
       tasks.push({ id, label, role, set, candidates: (data.participants || []).filter(p =>
-        p.roles?.[role] && (!gender || p.gender === gender) &&
-        (!partTypes || isParticipantEligibleForPartTypes(p.roles, partTypes)) &&
+        (pool ? pool(p) : p.roles?.[role] && (!partTypes || isParticipantEligibleForPartTypes(p.roles, partTypes))) &&
+        (!gender || p.gender === gender) &&
         !ledger.isBusy(p, m.dateStr) && !ledger.isUnavailable(p, m.dateStr)).sort((a, b) =>
         avoid(id, role, a) - avoid(id, role, b) || compareFor(role)(a, b)) });
     };
@@ -308,7 +324,8 @@ export function generateVitaAssignments(state, data, year, month, programs = {})
       addTask('studente-' + i, 'Parte ' + part.number + ': studente', 'ministeroStudente', p => {
         if (p !== part.studentId) part.isSent = false;
         part.studentId = p;
-      }, undefined, part.partTypeIds?.length ? part.partTypeIds : inferPartTypeIds(part.minutes, part.hasAssistant));
+      }, undefined, part.partTypeIds?.length ? part.partTypeIds : inferPartTypeIds(part.minutes, part.hasAssistant),
+      isCosaDireste(part) ? isAnzianoOServitore : undefined);
       if (part.hasAssistant) addTask('assistente-' + i, 'Parte ' + part.number + ': assistente', 'ministeroAssistente', p => {
         if (p !== part.assistantId) part.isSent = false;
         part.assistantId = p;
