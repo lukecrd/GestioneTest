@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import ts from 'typescript';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createSchedulingLedger, weeklyDates, generateVitaAssignments, vitaAssignmentIds, assignUniqueSlots, weeklyRoleConflicts, weekKey, vitaMonthlyRepeats } from '../src/utils/automaticScheduling.js';
+import { createSchedulingLedger, weeklyDates, generateVitaAssignments, vitaAssignmentIds, assignUniqueSlots, weeklyRoleConflicts, weekKey, vitaMonthlyRepeats, vitaMeetingDuplicates } from '../src/utils/automaticScheduling.js';
 
 const person = (id, name = id) => ({ id, name, gender: 'M', spouseId: null, roles: {} });
 const participant = (id, roles = { tesoriLettura: true }, personId) => ({ id, name: id, gender: 'M', personId, roles });
@@ -410,4 +410,18 @@ test('Tesori talks: own rotation, never the same person in consecutive weeks, on
   const solo = generate([t('A')], [meeting('h', '2026-09-30', { tesoriGemmeSpeakerId: 'A' }), meeting('t', '2026-10-07')]);
   assert.equal(solo.meetings.find(m => m.id === 't').tesoriGemmeSpeakerId, 'A');
   assert.ok(solo.warnings.some(w => w.includes('settimana vicina')));
+});
+
+test('Cosa direste? goes only to elders or ministerial servants', () => {
+  const student = { id: 's', name: 'Marco Moscatelli', gender: 'M', roles: { ministeroStudente: true } };
+  const servant = { id: 'm', name: 'Davide Vallini', gender: 'M', roles: {} };
+  const part = { id: 'p', number: 6, title: 'Cosa direste?', minutes: 6, studentId: '', hasAssistant: false };
+  const { meetings } = generate([student, servant], [meeting('v', '2026-10-07', { ministeroParts: [part] })]);
+  assert.equal(meetings[0].ministeroParts[0].studentId, 'm');
+});
+
+test('one brother per meeting except prayers', () => {
+  const people = [{ id: 'a', name: 'A' }];
+  assert.deepEqual(vitaMeetingDuplicates(meeting('v', '2026-10-07', { presidenteId: 'a', preghieraInizialeId: 'a', preghieraFinaleId: 'a' }), people), []);
+  assert.deepEqual(vitaMeetingDuplicates(meeting('v', '2026-10-07', { presidenteId: 'a', tesoriGemmeSpeakerId: 'a' }), people), ['A']);
 });
