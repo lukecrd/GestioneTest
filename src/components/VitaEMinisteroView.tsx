@@ -1773,6 +1773,7 @@ export function VitaEMinisteroView({
         <VitaEMinisteroPrintView
           data={vmData}
           participants={participants}
+          initialPeriod={`${selectedYear}-${String(selectedMonth + 1).padStart(2, '0')}`}
         />
       )}
 

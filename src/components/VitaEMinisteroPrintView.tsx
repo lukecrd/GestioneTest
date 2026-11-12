@@ -15,16 +15,18 @@ interface VitaEMinisteroPrintViewProps {
   data: VitaEMinisteroData;
   participants: VitaEMinisteroParticipant[];
   onPrint?: () => void;
+  initialPeriod?: string; // YYYY-MM: the month open in Programmazione
 }
 
 export function VitaEMinisteroPrintView({
   data,
   participants,
+  initialPeriod,
 }: VitaEMinisteroPrintViewProps) {
-  // Default: current month, if it has meetings.
+  // Default: the month open in Programmazione (else the current one), if it has meetings.
   const [filterPeriod, setFilterPeriod] = useState<string>(() => {
     const now = new Date();
-    const current = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+    const current = initialPeriod || `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
     return (data.meetings || []).some(m => m.dateStr?.startsWith(current)) ? current : 'all';
   });
 
