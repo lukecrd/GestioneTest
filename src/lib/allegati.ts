@@ -14,7 +14,7 @@ const leggiComeDataUrl = (file: File) => new Promise<string>((resolve, reject) =
 
 export async function caricaAllegato(file: File): Promise<string> {
   if (file.type !== 'application/pdf') throw new Error('Puoi caricare solo file PDF.');
-  if (file.size > MAX_ALLEGATO_BYTES) throw new Error(`Il PDF supera ${Math.round(MAX_ALLEGATO_BYTES / 1024)} KB: comprimilo o usa un link.`);
+  if (file.size > MAX_ALLEGATO_BYTES) throw new Error(`Il PDF supera ${Math.round(MAX_ALLEGATO_BYTES / 1024)} KB: comprimilo e riprova.`);
   const ref = doc(collection(db, 'allegati'));
   await setDoc(ref, { nome: file.name, dati: await leggiComeDataUrl(file), caricato: new Date().toISOString() });
   return ref.id;

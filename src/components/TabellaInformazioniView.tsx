@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowRight, Video, Link2, FileUp, Trash2, FileText, ExternalLink, CloudUpload } from 'lucide-react';
+import { ArrowRight, Video, FileUp, Trash2, FileText, ExternalLink, CloudUpload } from 'lucide-react';
 import type { SectionKey } from './ModernSectionHub';
 import type { TabellaAllegato } from '../types';
 import { apriAllegato, caricaAllegato } from '../lib/allegati';
 import { ACCOUNT_DRIVE, precaricaDrive } from '../lib/drive';
 
 // Riproduce la "Tabella Informazioni" stampata (design/00 - Tabella Informazioni - novembre.pdf):
-// ogni riquadro apre il programma corrispondente; quelli senza sezione aprono un link o un PDF scelto dall'amministratore.
+// ogni riquadro apre il programma corrispondente; quelli senza sezione aprono il PDF caricato dall'amministratore.
 
 interface TabellaInformazioniViewProps {
   onSelectSection: (section: SectionKey) => void;
@@ -21,7 +21,8 @@ interface TabellaInformazioniViewProps {
   onSalvaDrive?: () => Promise<void>; // assente: pulsante nascosto (non amministratori, PDF della tabella)
 }
 
-export type Voce = { titolo: string; img: string; sezione?: SectionKey };
+// allegabile: con sezione, l'amministratore può caricare un PDF che sostituisce quello generato dal programma.
+export type Voce = { titolo: string; img: string; sezione?: SectionKey; allegabile?: boolean };
 
 const PROGRAMMI_MESE: Voce[] = [
   { titolo: 'Adunanza Infrasettimanale', img: 'infrasettimanale', sezione: 'vitaEMinistero' },
@@ -35,7 +36,7 @@ const GRUPPI_DESTRA: { titolo: string; voci: [Voce, Voce] }[] = [
   {
     titolo: 'Attività da svolgere oltre alle pulizie settimanali e schede pulizie:',
     voci: [
-      { titolo: 'Programma pulizie', img: 'programma-pulizie', sezione: 'mensile' },
+      { titolo: 'Programma pulizie', img: 'programma-pulizie', sezione: 'mensile', allegabile: true },
       { titolo: 'Schede Pulizie', img: 'schede-pulizie' },
     ],
   },
@@ -98,19 +99,13 @@ export const TabellaInformazioniView: React.FC<TabellaInformazioniViewProps> = (
   };
 
   const apri = (voce: Voce) => {
-    const a = allegati[voce.img];
-    if (voce.sezione) {
+    const a = voce.sezione && !voce.allegabile ? undefined : allegati[voce.img];
+    if (a?.fileId) apriAllegato(a.fileId).catch(err => onErrore(err.message || 'Impossibile aprire il PDF.'));
+    else if (a?.url) window.open(a.url, '_blank', 'noopener,noreferrer');
+    else if (voce.sezione) {
       setInCaricamento(voce.img);
       onApriPdf(voce.sezione, voce.titolo).finally(() => setInCaricamento(null));
-    } else if (a?.fileId) apriAllegato(a.fileId).catch(err => onErrore(err.message || 'Impossibile aprire il PDF.'));
-    else if (a?.url) window.open(a.url, '_blank', 'noopener,noreferrer');
-  };
-
-  const impostaLink = (voce: Voce) => {
-    const url = window.prompt(`Link per "${voce.titolo}":`, allegati[voce.img]?.url || 'https://')?.trim();
-    if (!url) return;
-    if (!/^https?:\/\/\S+$/i.test(url)) { onErrore('Il link deve iniziare con http:// o https://'); return; }
-    onSalvaAllegato(voce.img, { url });
+    }
   };
 
   const caricaPdf = async (voce: Voce, file: File | undefined) => {
@@ -126,10 +121,12 @@ export const TabellaInformazioniView: React.FC<TabellaInformazioniViewProps> = (
   };
 
   const Riquadro: React.FC<{ voce: Voce; grande?: boolean }> = ({ voce, grande }) => {
-    const allegato = voce.sezione ? undefined : allegati[voce.img];
-    const collegato = voce.sezione ? visibile(voce.sezione) : !!(allegato?.url || allegato?.fileId);
+    const allegato = voce.sezione && !voce.allegabile ? undefined : allegati[voce.img];
+    const conAllegato = !!(allegato?.url || allegato?.fileId);
+    const collegato = conAllegato || (!!voce.sezione && visibile(voce.sezione));
     const caricando = inCaricamento === voce.img;
-    const etichetta = voce.sezione ? (caricando ? 'Preparazione PDF…' : 'Apri PDF del mese') : allegato?.fileId ? (allegato.nome || 'Apri PDF') : 'Apri link';
+    const etichetta = allegato?.fileId ? (caricando ? 'Caricamento…' : allegato.nome || 'Apri PDF') : allegato?.url ? 'Apri link'
+      : caricando ? 'Preparazione PDF…' : 'Apri PDF del mese';
     const contenuto = (
       <>
         <span className="block font-bold italic text-slate-900 dark:text-slate-100 text-sm sm:text-base">{voce.titolo}</span>
@@ -141,7 +138,7 @@ export const TabellaInformazioniView: React.FC<TabellaInformazioniViewProps> = (
         <span className="mt-1.5 inline-flex items-center gap-1 text-xs no-print max-w-full">
           {collegato ? (
             <span className="text-[#0b5563] dark:text-teal-300 font-semibold inline-flex items-center gap-1 min-w-0">
-              {voce.sezione || allegato?.fileId ? <FileText className="w-3 h-3 shrink-0" /> : <ExternalLink className="w-3 h-3 shrink-0" />}
+              {!allegato?.url || allegato?.fileId ? <FileText className="w-3 h-3 shrink-0" /> : <ExternalLink className="w-3 h-3 shrink-0" />}
               <span className="truncate">{etichetta}</span>
             </span>
           ) : <span className="text-slate-400 italic">Non ancora collegato</span>}
@@ -157,24 +154,21 @@ export const TabellaInformazioniView: React.FC<TabellaInformazioniViewProps> = (
             disabled={caricando}
             aria-busy={caricando}
             className="group block w-full text-center rounded-lg p-2 hover:bg-slate-50 dark:hover:bg-slate-800/60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#7b3fb5]"
-            aria-label={voce.sezione ? `Apri il PDF di ${voce.titolo}` : `Apri ${voce.titolo}`}
+            aria-label={voce.sezione && !conAllegato ? `Apri il PDF di ${voce.titolo}` : `Apri ${voce.titolo}`}
           >
             {contenuto}
           </button>
         ) : (
           <div className="block w-full text-center p-2" aria-disabled="true">{contenuto}</div>
         )}
-        {collegato && voce.sezione && (
+        {voce.sezione && visibile(voce.sezione) && (
           <button type="button" className="mx-auto flex items-center gap-1 text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 no-print"
             onClick={() => onSelectSection(voce.sezione!)}>
             Vai alla sezione <ArrowRight className="w-3 h-3" />
           </button>
         )}
-        {isAdmin && !voce.sezione && (
+        {isAdmin && (!voce.sezione || voce.allegabile) && (
           <div className="flex justify-center gap-1 no-print">
-            <button type="button" className="icon-button" title="Imposta link" aria-label={`Imposta link per ${voce.titolo}`} onClick={() => impostaLink(voce)}>
-              <Link2 className="w-4 h-4" />
-            </button>
             <label className={`icon-button cursor-pointer ${caricando ? 'opacity-50 pointer-events-none' : ''}`} title={caricando ? 'Caricamento…' : 'Carica PDF'}>
               <FileUp className="w-4 h-4" />
               <span className="sr-only">Carica PDF per {voce.titolo}</span>
