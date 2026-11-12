@@ -51,7 +51,8 @@ export const ModernSquareNavbar: React.FC<ModernSquareNavbarProps> = ({
     { id: 'impostazioni', label: 'Assenze e calendario', group: 'gestione' },
     { id: 'statistiche', label: 'Statistiche', group: 'gestione' },
     ...(utentiInAttesa !== null
-      ? [{ id: 'utenti' as const, label: 'Utenti', group: 'gestione' as const, ...(utentiInAttesa ? { badge: utentiInAttesa, alert: true } : {}) }]
+      ? [{ id: 'utenti' as const, label: 'Utenti', group: 'gestione' as const, ...(utentiInAttesa ? { badge: utentiInAttesa, alert: true } : {}) },
+         { id: 'log' as const, label: 'Registro attività', group: 'gestione' as const }]
       : []),
   ];
 

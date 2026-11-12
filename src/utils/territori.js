@@ -58,6 +58,15 @@ export function alertTerritori(assegnazioni, oggi = formatDay(new Date()), mesi 
     .sort((a, b) => a.giorniRimasti - b.giorniRimasti);
 }
 
+// Riepilogo della sezione: conta solo i territori in archivio, così disponibili + assegnati = territori.
+// Una cartina tolta mentre era fuori non pesa su assegnati e scadenze; le sue registrazioni restano nello storico.
+export function riepilogoTerritori(assegnazioni, numeri, oggi = formatDay(new Date()), mesi = MESI_SCADENZA) {
+  const aperte = assegnazioni.filter(a => !a.rientro && numeri.has(a.numero));
+  const alert = alertTerritori(aperte, oggi, mesi);
+  const scaduti = alert.filter(a => a.livello === 'scaduto').length;
+  return { aperte, disponibili: numeri.size - new Set(aperte.map(a => a.numero)).size, alert, scaduti, inScadenza: alert.length - scaduti };
+}
+
 // Rientrato davvero lavorato: un rientro "non percorso" non conta come lavorazione.
 const lavorata = a => a.rientro && !a.nonLavorato;
 

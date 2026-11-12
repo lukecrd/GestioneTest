@@ -89,6 +89,7 @@ test('actual App sync saves only the edited period plus unsynced legacy months',
     persistDomenicaPrograms: programs => { domProgramsRef.current = normalizeDomenicaPrograms(programs); },
     menRows: null, menTitle: '', menWarn: null, menMonth: 9, menYear: 2026,
     domRows: october['2026-10'].rows, domTitle: 'Ottobre', domWarn: null, domMonth: 9, domYear: 2026,
+    registraModifica: () => {},
     pushActiveProgramsToFirestore: data => { payload = data; return Promise.resolve(); },
     puoModificare: () => true, currentUser: { role: 'admin' },
   };
