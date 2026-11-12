@@ -1338,8 +1338,8 @@ try {
       const link: Record<string, string> = { zoom: ZOOM.url };
       const perSezione: Partial<Record<SectionKey, string>> = {}; // incarichi settimanali e pulizie: stesso PDF mensile
       for (const voce of VOCI_TABELLA) {
-        const allegato = state.tabellaAllegati?.[voce.img];
-        if (voce.sezione) {
+        const allegato = voce.sezione && !voce.allegabile ? undefined : state.tabellaAllegati?.[voce.img];
+        if (voce.sezione && !allegato?.fileId && !allegato?.url) {
           if (!(voce.sezione in perSezione)) {
             const foglio = foglioPdf(voce.sezione);
             if (!foglio) continue; // programma del mese non ancora pronto: riquadro senza link
