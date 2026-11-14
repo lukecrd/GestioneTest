@@ -1336,31 +1336,37 @@ try {
       // es. novembre 2026 -> "Tabella informazioni Roccastrada/2026 11"
       const cartella = await cartellaDrive(token, ['Tabella informazioni Roccastrada', `${meseTabella.y} ${String(meseTabella.m + 1).padStart(2, '0')}`]);
       const link: Record<string, string> = { zoom: ZOOM.url };
-      const perSezione: Partial<Record<SectionKey, string>> = {}; // incarichi settimanali e pulizie: stesso PDF mensile
+      const perSezione: Partial<Record<SectionKey, Promise<string>>> = {}; // incarichi settimanali e pulizie: stesso PDF mensile
       const nomiUsati = new Set([nome, ...Object.values(nomiDrive).map(t => `${t}.pdf`)]);
+      // I PDF si disegnano uno alla volta (creaPdf usa la pagina), i caricamenti su Drive partono insieme.
+      const invii: Promise<void>[] = [];
+      showToast('Drive: preparo i programmi…');
       for (const voce of VOCI_TABELLA) {
         const allegato = voce.sezione && !voce.allegabile ? undefined : state.tabellaAllegati?.[voce.img];
         if (voce.sezione && !allegato?.fileId && !allegato?.url) {
           if (!(voce.sezione in perSezione)) {
             const foglio = foglioPdf(voce.sezione);
             if (!foglio) continue; // programma del mese non ancora pronto: riquadro senza link
-            showToast(`Drive: carico "${voce.titolo}"…`);
             const titolo = nomiDrive[voce.sezione] || `${voce.titolo} - ${mese}`;
-            perSezione[voce.sezione] = (await caricaSuDrive(token, await creaPdf(foglio, titolo), `${titolo}.pdf`, { pubblico: true, cartella })).webViewLink;
+            const pdf = await creaPdf(foglio, titolo);
+            perSezione[voce.sezione] = caricaSuDrive(token, pdf, `${titolo}.pdf`, { pubblico: true, cartella }).then(c => c.webViewLink);
           }
-          link[voce.img] = perSezione[voce.sezione]!;
+          invii.push(perSezione[voce.sezione]!.then(l => { link[voce.img] = l; }));
         } else if (allegato?.fileId) {
-          showToast(`Drive: carico "${voce.titolo}"…`);
-          const file = await leggiAllegato(allegato.fileId);
           // ora i nomi uguali si sovrascrivono: due allegati con lo stesso nome di file non devono finire nello stesso PDF
           let nomeFile = allegato.nome || `${voce.titolo}.pdf`;
           if (nomiUsati.has(nomeFile)) nomeFile = `${voce.titolo} - ${nomeFile}`;
           nomiUsati.add(nomeFile);
-          link[voce.img] = (await caricaSuDrive(token, file, nomeFile, { pubblico: true, cartella })).webViewLink;
+          invii.push(leggiAllegato(allegato.fileId)
+            .then(file => caricaSuDrive(token, file, nomeFile, { pubblico: true, cartella }))
+            .then(c => { link[voce.img] = c.webViewLink; }));
         } else if (allegato?.url) {
           link[voce.img] = allegato.url;
         }
+        invii.at(-1)?.catch(() => {}); // l'errore arriva da Promise.all; qui evita "unhandled rejection" se il ciclo si ferma prima
       }
+      showToast(`Drive: carico ${invii.length} file…`);
+      await Promise.all(invii);
       const tabella = (
         <TabellaInformazioniView onSelectSection={() => {}} visibile={sez => puoVedere(currentUser, sez)} allegati={state.tabellaAllegati || {}}
           isAdmin={false} onSalvaAllegato={() => {}} onErrore={() => {}} onApriPdf={() => Promise.resolve()} mese={meseTabella} />

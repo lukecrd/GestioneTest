@@ -66,12 +66,12 @@ export async function accediDrive(): Promise<string> {
 const testoQuery = (s: string) => s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 
 // Cerca (o crea) le cartelle del percorso, una dentro l'altra, e restituisce l'id dell'ultima.
-// Con drive.readonly vede anche le cartelle fatte a mano: una con lo stesso nome può essere usata.
+// Con drive.readonly vede anche le cartelle fatte a mano: con più cartelle dallo stesso nome usa sempre la più vecchia.
 export async function cartellaDrive(token: string, percorso: string[]): Promise<string> {
   let padre = 'root';
   for (const nome of percorso) {
     const q = `name = '${testoQuery(nome)}' and mimeType = 'application/vnd.google-apps.folder' and '${padre}' in parents and trashed = false`;
-    const r = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)&pageSize=1`, { headers: { Authorization: `Bearer ${token}` } });
+    const r = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)&pageSize=1&orderBy=createdTime`, { headers: { Authorization: `Bearer ${token}` } });
     if (r.status === 401) salvato = null;
     if (!r.ok) throw new Error(`Drive non ha trovato la cartella "${nome}" (errore ${r.status}).`);
     const trovata = (await r.json()).files?.[0]?.id;
