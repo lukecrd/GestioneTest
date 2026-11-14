@@ -63,12 +63,14 @@ export async function accediDrive(): Promise<string> {
   return token;
 }
 
+const testoQuery = (s: string) => s.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+
 // Cerca (o crea) le cartelle del percorso, una dentro l'altra, e restituisce l'id dell'ultima.
-// Con drive.file l'app vede solo le cartelle create da lei: una cartella con lo stesso nome fatta a mano non viene trovata.
+// Con drive.readonly vede anche le cartelle fatte a mano: una con lo stesso nome può essere usata.
 export async function cartellaDrive(token: string, percorso: string[]): Promise<string> {
   let padre = 'root';
   for (const nome of percorso) {
-    const q = `name = '${nome.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}' and mimeType = 'application/vnd.google-apps.folder' and '${padre}' in parents and trashed = false`;
+    const q = `name = '${testoQuery(nome)}' and mimeType = 'application/vnd.google-apps.folder' and '${padre}' in parents and trashed = false`;
     const r = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id)&pageSize=1`, { headers: { Authorization: `Bearer ${token}` } });
     if (r.status === 401) salvato = null;
     if (!r.ok) throw new Error(`Drive non ha trovato la cartella "${nome}" (errore ${r.status}).`);
@@ -105,12 +107,23 @@ export async function pdfInCartella(token: string, cartella: string): Promise<{ 
 }
 
 // pubblico: "chiunque abbia il link può visualizzare" (i PDF dei programmi collegati dalla tabella, scelta dell'utente).
+// Se nella cartella c'è già un file con lo stesso nome lo sovrascrive (stesso id e stesso link), senza creare doppioni.
 export async function caricaSuDrive(token: string, file: Blob, nome: string, { pubblico = false, cartella }: { pubblico?: boolean; cartella?: string } = {}): Promise<{ id: string; webViewLink: string }> {
+  let esistente: string | undefined;
+  if (cartella) {
+    const q = `name = '${testoQuery(nome)}' and '${cartella}' in parents and mimeType = '${file.type || 'application/pdf'}' and trashed = false`;
+    const s = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(q)}&fields=files(id,capabilities/canEdit)&orderBy=createdTime`, { headers: { Authorization: `Bearer ${token}` } });
+    if (s.status === 401) salvato = null;
+    if (!s.ok) throw new Error(`Drive non ha cercato "${nome}" (errore ${s.status}).`);
+    // solo i file che l'app può modificare (drive.file: creati da lei); quelli messi a mano restano e se ne crea uno nuovo
+    esistente = ((await s.json()).files ?? []).find((f: { capabilities?: { canEdit?: boolean } }) => f.capabilities?.canEdit)?.id;
+  }
   const corpo = new FormData();
-  corpo.append('metadata', new Blob([JSON.stringify({ name: nome, mimeType: file.type || 'application/pdf', ...(cartella && { parents: [cartella] }) })], { type: 'application/json' }));
+  // in aggiornamento "parents" non è ammesso: il file resta dov'è
+  corpo.append('metadata', new Blob([JSON.stringify({ name: nome, mimeType: file.type || 'application/pdf', ...(cartella && !esistente && { parents: [cartella] }) })], { type: 'application/json' }));
   corpo.append('file', file);
-  const r = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,webViewLink', {
-    method: 'POST',
+  const r = await fetch(`https://www.googleapis.com/upload/drive/v3/files${esistente ? '/' + esistente : ''}?uploadType=multipart&fields=id,webViewLink`, {
+    method: esistente ? 'PATCH' : 'POST',
     headers: { Authorization: `Bearer ${token}` },
     body: corpo,
   });
