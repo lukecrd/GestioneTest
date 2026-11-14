@@ -1337,6 +1337,7 @@ try {
       const cartella = await cartellaDrive(token, ['Tabella informazioni Roccastrada', `${meseTabella.y} ${String(meseTabella.m + 1).padStart(2, '0')}`]);
       const link: Record<string, string> = { zoom: ZOOM.url };
       const perSezione: Partial<Record<SectionKey, string>> = {}; // incarichi settimanali e pulizie: stesso PDF mensile
+      const nomiUsati = new Set([nome, ...Object.values(nomiDrive).map(t => `${t}.pdf`)]);
       for (const voce of VOCI_TABELLA) {
         const allegato = voce.sezione && !voce.allegabile ? undefined : state.tabellaAllegati?.[voce.img];
         if (voce.sezione && !allegato?.fileId && !allegato?.url) {
@@ -1351,7 +1352,11 @@ try {
         } else if (allegato?.fileId) {
           showToast(`Drive: carico "${voce.titolo}"…`);
           const file = await leggiAllegato(allegato.fileId);
-          link[voce.img] = (await caricaSuDrive(token, file, allegato.nome || `${voce.titolo}.pdf`, { pubblico: true, cartella })).webViewLink;
+          // ora i nomi uguali si sovrascrivono: due allegati con lo stesso nome di file non devono finire nello stesso PDF
+          let nomeFile = allegato.nome || `${voce.titolo}.pdf`;
+          if (nomiUsati.has(nomeFile)) nomeFile = `${voce.titolo} - ${nomeFile}`;
+          nomiUsati.add(nomeFile);
+          link[voce.img] = (await caricaSuDrive(token, file, nomeFile, { pubblico: true, cartella })).webViewLink;
         } else if (allegato?.url) {
           link[voce.img] = allegato.url;
         }
