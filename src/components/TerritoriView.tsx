@@ -499,7 +499,8 @@ export const TerritoriView: React.FC<TerritoriViewProps> = ({ state, onSaveState
       const cartella = await cartellaDrive(token, ['Territori']);
       for (const [numero, { nome, el: file }] of scelte) {
         setCaricando(`${nuove.length + falliti.length + 1}/${scelte.size}`);
-        try { nuove.push(await inviaCartina(token, cartella, numero, nome, file)); } catch { falliti.push(numero); }
+        try { nuove.push(await inviaCartina(token, cartella, numero, nome, file)); }
+        catch (err) { falliti.push(`${numero} (${err instanceof Error ? err.message : 'errore'})`); }
       }
     } catch (err) {
       onShowToast(err instanceof Error ? err.message : 'Caricamento non riuscito.');
@@ -508,8 +509,9 @@ export const TerritoriView: React.FC<TerritoriViewProps> = ({ state, onSaveState
       if (nuove.length) salvaAggiunte(nuove);
       setCaricando(null);
     }
-    if (nuove.length) onShowToast(`${nuove.length} ${nuove.length === 1 ? 'cartina caricata' : 'cartine caricate'} su Drive.`
-      + (falliti.length ? ` Non riuscite: ${falliti.join(', ')}.` : ''));
+    // anche se nessuna è riuscita: prima, con tutte fallite, non compariva nessun messaggio
+    if (nuove.length || falliti.length) onShowToast(`${nuove.length} ${nuove.length === 1 ? 'cartina caricata' : 'cartine caricate'} su Drive.`
+      + (falliti.length ? ` Non riuscite: ${falliti.join('; ')}.` : ''));
   };
 
   // Importa i PDF della cartella Drive indicata in Impostazioni: non li copia, usa i loro link.

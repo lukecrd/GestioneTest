@@ -251,6 +251,7 @@ export default function App({ utente, onEsci }: { utente: AuthUser; onEsci: () =
 
   // Toast
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [toastLink, setToastLink] = useState<string | null>(null);
   const toastTimer = useRef<any>(null);
 
   // Custom Confirm Modal State
@@ -263,10 +264,12 @@ export default function App({ utente, onEsci }: { utente: AuthUser; onEsci: () =
   }
   const [confirmModalState, setConfirmModalState] = useState<ConfirmModalConfig | null>(null);
 
-  const showToast = (msg: string) => {
+  // link: il messaggio resta di più, per avere il tempo di cliccarlo
+  const showToast = (msg: string, link?: string) => {
     setToastMsg(msg);
+    setToastLink(link ?? null);
     if (toastTimer.current) clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToastMsg(null), 2600);
+    toastTimer.current = setTimeout(() => setToastMsg(null), link ? 10000 : 2600);
   };
 
   // Auto-save & Remote Firestore sync handler
@@ -1336,38 +1339,44 @@ try {
       // es. novembre 2026 -> "Tabella informazioni Roccastrada/2026 11"
       const cartella = await cartellaDrive(token, ['Tabella informazioni Roccastrada', `${meseTabella.y} ${String(meseTabella.m + 1).padStart(2, '0')}`]);
       const link: Record<string, string> = { zoom: ZOOM.url };
-      const perSezione: Partial<Record<SectionKey, string>> = {}; // incarichi settimanali e pulizie: stesso PDF mensile
+      const perSezione: Partial<Record<SectionKey, Promise<string>>> = {}; // incarichi settimanali e pulizie: stesso PDF mensile
       const nomiUsati = new Set([nome, ...Object.values(nomiDrive).map(t => `${t}.pdf`)]);
+      // I PDF si disegnano uno alla volta (creaPdf usa la pagina), i caricamenti su Drive partono insieme.
+      const invii: Promise<void>[] = [];
+      showToast('Drive: preparo i programmi…');
       for (const voce of VOCI_TABELLA) {
         const allegato = voce.sezione && !voce.allegabile ? undefined : state.tabellaAllegati?.[voce.img];
         if (voce.sezione && !allegato?.fileId && !allegato?.url) {
           if (!(voce.sezione in perSezione)) {
             const foglio = foglioPdf(voce.sezione);
             if (!foglio) continue; // programma del mese non ancora pronto: riquadro senza link
-            showToast(`Drive: carico "${voce.titolo}"…`);
             const titolo = nomiDrive[voce.sezione] || `${voce.titolo} - ${mese}`;
-            perSezione[voce.sezione] = (await caricaSuDrive(token, await creaPdf(foglio, titolo), `${titolo}.pdf`, { pubblico: true, cartella })).webViewLink;
+            const pdf = await creaPdf(foglio, titolo);
+            perSezione[voce.sezione] = caricaSuDrive(token, pdf, `${titolo}.pdf`, { pubblico: true, cartella }).then(c => c.webViewLink);
           }
-          link[voce.img] = perSezione[voce.sezione]!;
+          invii.push(perSezione[voce.sezione]!.then(l => { link[voce.img] = l; }));
         } else if (allegato?.fileId) {
-          showToast(`Drive: carico "${voce.titolo}"…`);
-          const file = await leggiAllegato(allegato.fileId);
           // ora i nomi uguali si sovrascrivono: due allegati con lo stesso nome di file non devono finire nello stesso PDF
           let nomeFile = allegato.nome || `${voce.titolo}.pdf`;
           if (nomiUsati.has(nomeFile)) nomeFile = `${voce.titolo} - ${nomeFile}`;
           nomiUsati.add(nomeFile);
-          link[voce.img] = (await caricaSuDrive(token, file, nomeFile, { pubblico: true, cartella })).webViewLink;
+          invii.push(leggiAllegato(allegato.fileId)
+            .then(file => caricaSuDrive(token, file, nomeFile, { pubblico: true, cartella }))
+            .then(c => { link[voce.img] = c.webViewLink; }));
         } else if (allegato?.url) {
           link[voce.img] = allegato.url;
         }
+        invii.at(-1)?.catch(() => {}); // l'errore arriva da Promise.all; qui evita "unhandled rejection" se il ciclo si ferma prima
       }
+      showToast(`Drive: carico ${invii.length} file…`);
+      await Promise.all(invii);
       const tabella = (
         <TabellaInformazioniView onSelectSection={() => {}} visibile={sez => puoVedere(currentUser, sez)} allegati={state.tabellaAllegati || {}}
           isAdmin={false} onSalvaAllegato={() => {}} onErrore={() => {}} onApriPdf={() => Promise.resolve()} mese={meseTabella} />
       );
       const pdf = await creaPdf(tabella, nome, { stampa: false, larghezzaPx: 1000, finestraPx: 1280, unaPagina: true, link });
       await caricaSuDrive(token, pdf, nome, { cartella });
-      showToast(`Tabella salvata su Drive (${ACCOUNT_DRIVE}): ${nome}`);
+      showToast(`Tabella salvata su Drive (${ACCOUNT_DRIVE}): ${nome}`, `https://drive.google.com/drive/folders/${cartella}`);
     } catch (err: any) {
       console.error(err);
       showToast(err?.message || 'Salvataggio su Drive non riuscito');
@@ -3064,6 +3073,7 @@ try {
         <div className="toast">
           <Check className="w-4 h-4 text-emerald-400" />
           <span>{toastMsg}</span>
+          {toastLink && <a href={toastLink} target="_blank" rel="noopener noreferrer" className="underline text-emerald-300">Apri la cartella</a>}
         </div>
       )}
     </div>
