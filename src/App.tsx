@@ -251,6 +251,7 @@ export default function App({ utente, onEsci }: { utente: AuthUser; onEsci: () =
 
   // Toast
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [toastLink, setToastLink] = useState<string | null>(null);
   const toastTimer = useRef<any>(null);
 
   // Custom Confirm Modal State
@@ -263,10 +264,12 @@ export default function App({ utente, onEsci }: { utente: AuthUser; onEsci: () =
   }
   const [confirmModalState, setConfirmModalState] = useState<ConfirmModalConfig | null>(null);
 
-  const showToast = (msg: string) => {
+  // link: il messaggio resta di più, per avere il tempo di cliccarlo
+  const showToast = (msg: string, link?: string) => {
     setToastMsg(msg);
+    setToastLink(link ?? null);
     if (toastTimer.current) clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToastMsg(null), 2600);
+    toastTimer.current = setTimeout(() => setToastMsg(null), link ? 10000 : 2600);
   };
 
   // Auto-save & Remote Firestore sync handler
@@ -1373,7 +1376,7 @@ try {
       );
       const pdf = await creaPdf(tabella, nome, { stampa: false, larghezzaPx: 1000, finestraPx: 1280, unaPagina: true, link });
       await caricaSuDrive(token, pdf, nome, { cartella });
-      showToast(`Tabella salvata su Drive (${ACCOUNT_DRIVE}): ${nome}`);
+      showToast(`Tabella salvata su Drive (${ACCOUNT_DRIVE}): ${nome}`, `https://drive.google.com/drive/folders/${cartella}`);
     } catch (err: any) {
       console.error(err);
       showToast(err?.message || 'Salvataggio su Drive non riuscito');
@@ -3070,6 +3073,7 @@ try {
         <div className="toast">
           <Check className="w-4 h-4 text-emerald-400" />
           <span>{toastMsg}</span>
+          {toastLink && <a href={toastLink} target="_blank" rel="noopener noreferrer" className="underline text-emerald-300">Apri la cartella</a>}
         </div>
       )}
     </div>
